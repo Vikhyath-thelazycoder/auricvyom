@@ -156,7 +156,7 @@ Microservices introduce severe operational friction for early-stage and growth p
 ┌────────────────────────────────────────────────────────────────────────────────────────┐
 │                               MASTER TECHNOLOGY STACK                                  │
 ├──────────────────────┬─────────────────────────────────────────────────────────────────┤
-│ Frontend             │ React + TypeScript (V1 SPA with strict typed DTO contracts)     │
+│ Frontend             │ [CURRENT] Complete Vanilla ES6+ SPA • [TARGET] React + TypeScript │
 │ Backend Runtime      │ Node.js (LTS) + TypeScript + NestJS Framework                  │
 │ Primary Database     │ AWS RDS for PostgreSQL (Multi-AZ) + pgvector Extension          │
 │ ORM / Data Layer     │ Prisma ORM (Typed client, migrations, relation management)      │
@@ -169,7 +169,7 @@ Microservices introduce severe operational friction for early-stage and growth p
 │ Automation           │ n8n (External orchestration via HMAC-SHA256 signed webhooks)    │
 │ AI Layer             │ Centralized AI Gateway + Bounded Tool Dispatcher + LLM APIs     │
 │ Secrets & Keys       │ AWS Secrets Manager + AWS Key Management Service (KMS)          │
-│ Queue / Outbox       │ Transactional Outbox + Redis BullMQ (V1) / Amazon SQS           │
+│ Queue / Outbox       │ Primary: PostgreSQL Outbox + Redis BullMQ; DLQ: dlq_events       │
 │ Observability        │ OpenTelemetry + Amazon CloudWatch (Logs, Metrics, Traces)       │
 └──────────────────────┴─────────────────────────────────────────────────────────────────┘
 ```
@@ -226,8 +226,9 @@ AWS CLOUD INFRASTRUCTURE FOOTPRINT
 │   └── AWS KMS: Customer-managed keys (CMKs) for S3 KYC encryption, RDS storage, and secrets
 │
 └── Queue & Asynchronous Processing:
-    ├── Redis BullMQ: Fast in-memory job queue for outbox dispatch, emails, and notifications
-    └── Amazon SQS (Optional Fallback): Dead-letter queue for unprocessable outbox events
+    ├── Primary Queue: Redis BullMQ (In-memory delayed jobs, 15m room hold expiry, P0 emergency dispatch, outbox relay)
+    ├── Durable Outbox Log: PostgreSQL outbox_events table (Committed atomically with business state)
+    └── Dead-Letter Queue (DLQ): PostgreSQL dlq_events table (Exhausted retry quarantine + CloudWatch alerting)
 ```
 
 ## 6.4 AWS Infrastructure Does Not Change Domain Ownership
@@ -283,6 +284,7 @@ To prevent state synchronization nightmares, the following boundaries are absolu
 - **NO Firestore Wallet:** Expenses and splits exist ONLY in PostgreSQL.
 - **NO Firebase Property Inventory:** Availability exists ONLY in PostgreSQL.
 - **NO Firebase KYC Store:** Identity verification metadata exists ONLY in PostgreSQL.
+- **Firebase Realtime Database / Firestore [DEFERRED IN V1]:** Not used for business state or messaging. Live application state is owned strictly by NestJS WebSockets + Redis Pub/Sub. No client shall connect to Firebase Realtime Database.
 
 ---
 
@@ -375,7 +377,7 @@ AuricVista integrates Google Maps Platform APIs for spatial intelligence, destin
 │ **Redis (ElastiCache)**   │ Session cache, rate limits, queues, locks │ **NO (Ephemeral)**      │
 │ **Firebase Auth**         │ Social/phone identity provider            │ **Identity Provider**   │
 │ **Firebase FCM**          │ Mobile/web push notification delivery     │ **NO (Transport)**      │
-│ **Firebase Realtime/DB**  │ Ephemeral presence / transient sync only  │ **NO (Ephemeral)**      │
+│ **Firebase Realtime/DB**  │ [DEFERRED IN V1] — WebSockets + Redis Pub/Sub owns live state │ **NO (Deferred)**       │
 │ **Cloudflare**            │ Edge WAF, DDoS mitigation, DNS, static CDN│ **NO (Edge Gate)**      │
 │ **Google Maps Platform**  │ Geographic search, geocoding, routes, ETA │ **NO (External Intel)** │
 │ **Google Photoreal 3D**   │ 3D terrain and landscape visualization    │ **NO (Visualization)**  │
@@ -895,7 +897,7 @@ PostgreSQL Transaction COMMIT
              Event Publisher
                       │
                       ▼
-         Redis BullMQ / Amazon SQS
+         Redis BullMQ (Primary Queue) ──▶ DLQ: dlq_events
                       │
             ┌─────────┴─────────┐
             ▼                   ▼

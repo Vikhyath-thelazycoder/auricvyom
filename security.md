@@ -131,7 +131,35 @@ Enforced by a Redis-backed sliding-window algorithm at the API Gateway:
 3. **[REQUIRED] Credential Stuffing Mitigation:** Integrate IP reputation scoring, anomalous login velocity checks, and CAPTCHA challenge requirements upon detecting suspicious failed-attempt spikes across multiple accounts.
 4. **[REQUIRED] Complete Session Revocation:** Changing passwords, updating email/phone, or clicking "Sign Out All Devices" must immediately revoke all active refresh tokens and blacklist current JWTs via a Redis revocation list until token expiry.
 
+### 3.4 Firebase Authentication Identity Provider Boundary & Session Exchange
+Firebase Authentication operates strictly as a supporting **Identity Provider (IdP)** for client-side social login (Google, Apple) and mobile phone SMS OTP verification. It is NOT the authoritative application session manager or business database.
+
+```text
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│                   FIREBASE AUTHENTICATION ──▶ BACKEND SESSION EXCHANGE                 │
+├────────────────────────────────────────────────────────────────────────────────────────┤
+│ 1. Client authenticates via Firebase Client SDK (Google / Apple / Phone SMS)           │
+│ 2. Firebase SDK returns short-lived Firebase ID Token (JWT signed by Google)          │
+│ 3. Client submits ID token to NestJS: `POST /api/v1/auth/firebase-login`               │
+│ 4. NestJS AuthModule verifies token using `firebase-admin` SDK:                        │
+│    - Validates Google cryptographic signature, expiration, and project audience (`aud`)│
+│ 5. NestJS resolves or creates authoritative user record in AWS RDS PostgreSQL:         │
+│    - Maps Firebase UID to internal `users.id` (UUIDv4); links verified email/phone     │
+│ 6. NestJS establishes Authoritative Application Session:                               │
+│    - Writes new session record to PostgreSQL `user_sessions` table                     │
+│    - Initializes rotating refresh token family in Redis and PostgreSQL                │
+│ 7. NestJS issues authoritative AuricVista credentials:                                 │
+│    - Short-lived Access Token (JWT, 15m) + Rotating Refresh Token (7d)                 │
+│    - Delivered strictly via `HttpOnly`, `Secure`, `SameSite=Strict`, `Path=/api` cookies │
+│ 8. Firebase ID token is discarded by client; CANNOT authorize AuricVista domain APIs   │
+│ 9. Revocation & Account Deletion: If a Firebase account is disabled or deleted, the    │
+│    subsequent refresh attempt or identity sync immediately revokes the session.        │
+└────────────────────────────────────────────────────────────────────────────────────────┘
+```
+* **Status:** `[REQUIRED]` (Authoritative identity exchange pattern; zero Firebase claims bypass).
+
 ---
+
 
 # 4. AUTHORIZATION, RBAC & RESOURCE INTEGRITY
 

@@ -12,8 +12,8 @@
 > - **Primary Automation Platform:** n8n (Self-hosted on AWS ECS Fargate / Docker in Private Application Subnet)
 > - **Primary Relational Database:** AWS RDS for PostgreSQL (Multi-AZ) — Authoritative System of Record
 > - **Primary Backend:** TypeScript + Node.js + NestJS (Modular Monolith Gateway)
-> - **Primary Frontend:** React + TypeScript (V1 SPA with strict typed DTO contracts)
-> - **Event & Queue Infrastructure:** Transactional Outbox Pattern in PostgreSQL + Redis BullMQ / Amazon SQS
+> - **Primary Frontend:** [CURRENT] Complete Vanilla ES6+ SPA • [TARGET] React + TypeScript
+> - **Event & Queue Infrastructure:** Primary: PostgreSQL Transactional Outbox + Redis BullMQ; DLQ: dlq_events
 > - **Edge / WAF / CDN:** Cloudflare (WAF, DDoS mitigation, TLS 1.3, edge rate limiting)
 > - **Push Notifications:** Firebase Cloud Messaging (FCM via Firebase Admin SDK)
 > - **Email Delivery:** Amazon Simple Email Service (SES) / SendGrid
@@ -96,7 +96,7 @@ To maintain complete cross-PRD consistency, the authoritative boundaries establi
 │ **Redis (ElastiCache)**   │ Session cache, rate limits, queues, locks │ **NO (Ephemeral)**      │
 │ **Firebase Auth**         │ Social/phone identity provider            │ **Identity Provider**   │
 │ **Firebase FCM**          │ Mobile/web push notification delivery     │ **NO (Transport)**      │
-│ **Firebase Realtime/DB**  │ Ephemeral presence / transient sync only  │ **NO (Ephemeral)**      │
+│ **Firebase Realtime/DB**  │ [DEFERRED IN V1] — WebSockets + Redis Pub/Sub owns live state │ **NO (Deferred)**       │
 │ **Cloudflare**            │ Edge WAF, DDoS mitigation, DNS, static CDN│ **NO (Edge Gate)**      │
 │ **Google Maps Platform**  │ Geographic search, geocoding, routes, ETA │ **NO (External Intel)** │
 │ **Google Photoreal 3D**   │ 3D terrain and landscape visualization    │ **NO (Visualization)**  │
@@ -205,9 +205,7 @@ n8n is an external orchestrator. It must NEVER become the authoritative source o
 Frontend ──▶ n8n Webhook ──▶ Direct PostgreSQL Connection / Mutation
 ```
 
-### ✅ Authoritative Pattern (Mandatory):
-```text
-Frontend ──▶ NestJS API ──▶ DB Transaction ──▶ Outbox Event ──▶ SQS/BullMQ ──▶ n8n ──▶ Controlled API Update
+Frontend ──▶ NestJS API ──▶ DB Transaction ──▶ Outbox Event ──▶ BullMQ Relay ──▶ n8n ──▶ Controlled API Update
 ```
 
 ---
@@ -241,7 +239,7 @@ AuricVista deploys **self-hosted n8n** running on **AWS ECS Fargate** in the pri
                      Transactional Outbox Record
                                │
                                ▼
-                    EVENT QUEUE (BullMQ / SQS)
+                    PRIMARY QUEUE (Redis BullMQ) ──▶ DLQ: dlq_events
                                │
                                ▼
                     n8n CENTRAL EVENT INTAKE

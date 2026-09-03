@@ -3,14 +3,17 @@
 ## PRODUCT REQUIREMENTS DOCUMENT — FRONTEND & MOBILE-FIRST PRODUCT EXPERIENCE
 
 > [!NOTE]
-> **DOCUMENT METADATA**
+> **DOCUMENT METADATA & IMPLEMENTATION TAXONOMY**
 > - **Document Type:** Product Requirements Document + UX/Product Specification
 > - **Scope:** Frontend, Mobile-First UX, User Journeys, Product Screens and Interaction Requirements
-> - **Primary Frontend Stack Direction:** React + TypeScript
+> - **Current Working Implementation:** Complete production client Single Page Application (SPA) built in Vanilla ES6+ modules (`index.html`, `js/app.js`, `js/components/*.js`, `styles/main.css`) served via Alpine Nginx container (`Dockerfile`).
+> - **Target Architecture Direction:** React + TypeScript (Next.js-compatible modular component hierarchy).
+> - **Migration Requirement:** The typed contracts, component states, and data models defined in this PRD serve as the strict specification for the React + TypeScript target architecture while governing the active Vanilla ES6 implementation.
 > - **Primary Experience:** Mobile-first responsive application
 > - **Secondary Experience:** Desktop responsive web experience
-> - **Status:** Master Frontend PRD
-> - **Version:** 1.0
+> - **Status:** Master Frontend PRD — Version 2.1 Synchronized
+> - **Version:** 2.1
+
 
 # 1. PRODUCT DEFINITION
 
