@@ -3,2498 +3,850 @@
 ## PRODUCT REQUIREMENTS DOCUMENT — AUTOMATION, AI ORCHESTRATION & WORKFLOW SYSTEM
 
 > [!NOTE]
-> **DOCUMENT METADATA**
+> **DOCUMENT METADATA & REVISION CONTROL**
+> - **Document Version:** 2.1 — Master Automation & AI Orchestration Specification
 > - **Document Type:** Technical Product Requirements Document
 > - **PRD Number:** 3 of 3
-> - **Scope:** Automation architecture, n8n workflows, AI orchestration, webhooks, event routing, notifications, CRM, scheduled workflows, external integrations and operational automation
-> - **Primary Automation Platform:** n8n
-> - **Primary Backend:** TypeScript + NestJS
-> - **Primary Frontend:** React + TypeScript
-> - **Architecture Model:** Event-Driven + Backend-Controlled Automation
-> - **Status:** Master PRD — Directly integrated with PRD 1 and PRD 2
+> - **Scope:** Automation architecture, n8n workflows, AI orchestration, event intake, notifications, CRM, scheduled jobs, external integrations, and operational automation.
+> - **Primary Cloud Infrastructure:** Amazon Web Services (AWS) — Managed Infrastructure
+> - **Primary Automation Platform:** n8n (Self-hosted on AWS ECS Fargate / Docker in Private Application Subnet)
+> - **Primary Relational Database:** AWS RDS for PostgreSQL (Multi-AZ) — Authoritative System of Record
+> - **Primary Backend:** TypeScript + Node.js + NestJS (Modular Monolith Gateway)
+> - **Primary Frontend:** React + TypeScript (V1 SPA with strict typed DTO contracts)
+> - **Event & Queue Infrastructure:** Transactional Outbox Pattern in PostgreSQL + Redis BullMQ / Amazon SQS
+> - **Edge / WAF / CDN:** Cloudflare (WAF, DDoS mitigation, TLS 1.3, edge rate limiting)
+> - **Push Notifications:** Firebase Cloud Messaging (FCM via Firebase Admin SDK)
+> - **Email Delivery:** Amazon Simple Email Service (SES) / SendGrid
+> - **SMS / Telephony:** Twilio / Gupshup
+> - **WhatsApp Messaging:** WhatsApp Cloud API (Transactional booking passes & safety alerts)
+> - **Geographic Intelligence:** Google Maps Platform (Places, Geocoding, Routes, 3D Photoreal Maps)
+> - **Status:** Master PRD — Fully aligned with Backend PRD v2.1, `security.md`, `design.md`, and `auricvista system flow.md`.
+
+---
+
+## ARCHITECTURAL IMPLEMENTATION STATUS TAXONOMY
+
+Every automation workflow and integration engine specified within this PRD is classified under one of the following authoritative states:
+
+* `[SPECIFIED]`: Architecturally established and fully specified in this master document; ready for workflow implementation.
+* `[PARTIALLY IMPLEMENTED]`: Partially represented or prototyped in the repository (e.g. simulated notifications or mock webhooks), requiring production n8n workflow deployment.
+* `[IMPLEMENTED]`: Confirmed and actively running in the working codebase.
+* `[REQUIRES IMPLEMENTATION]`: Mandatory production workflow, webhook endpoint, or event trigger that developers must build.
+* `[NEEDS VALIDATION]`: Configuration or external integration requiring third-party credentials (WhatsApp, Twilio, HyperVerge) prior to deployment.
+* `[OUTDATED]`: Superseded architectural assumption or deprecated pattern (e.g. direct n8n database reads/writes, unthrottled SOS automation, untyped AI agent proliferation).
+
+---
 
 # 1. PURPOSE OF THIS PRD
 
 This document defines the complete automation layer of AuricVista.
 
 It answers:
-
 - What should be automated?
 - What should **not** be automated?
 - Which frontend actions trigger automation?
 - Which backend events trigger automation?
-- How does n8n connect to the backend?
-- Where does AI participate?
-- Which workflows require human approval?
-- How are notifications controlled?
-- How are failures handled?
-- How are workflows scaled?
-- How are duplicate executions prevented?
-- How are safety and SOS workflows handled?
-- How do all automation domains connect without creating workflow chaos?
-This PRD must be implemented together with:
+- How does n8n connect to the backend securely?
+- Where does AI participate and where is it prohibited?
+- Which workflows require explicit human approval?
+- How are notifications coordinated across push, SMS, WhatsApp, and email?
+- How are failures, retries, and dead-letter queues handled?
+- How are workflows scaled on AWS infrastructure?
+- How are duplicate executions prevented during network retries?
+- How are deterministic safety and SOS workflows dispatched?
+- How do all automation engines connect without creating workflow chaos?
+
+This PRD operates in strict harmony with the system lifecycle:
 
 ```text
-PRD 1
-FRONTEND & USER EXPERIENCE
+PRD 1: FRONTEND & USER EXPERIENCE
         ↓
 User clicks / submits / interacts
         ↓
-PRD 2
-BACKEND & CORE SYSTEM
+PRD 2: BACKEND & CORE SYSTEM (v2.1)
         ↓
-Validates action + updates authoritative state
+Validates action + updates authoritative state in AWS RDS PostgreSQL
         ↓
-Event / Queue / Webhook
+Transactional Outbox Event / Queue (BullMQ / SQS)
         ↓
-PRD 3
-AUTOMATION & AI ORCHESTRATION
+PRD 3: AUTOMATION & AI ORCHESTRATION (n8n)
         ↓
 n8n / AI / External APIs / Notifications
         ↓
-Controlled Backend Update
+Controlled, Scoped Backend API Update (if required)
         ↓
-Realtime Frontend Update
+Realtime Frontend Update (WebSockets / FCM)
 ```
 
-**The central architecture from the R&D is explicit: backend owns transactions and authoritative state; n8n owns business-process orchestration, integrations, notifications, CRM, approvals and retries; AI/external systems provide specialized capabilities. AuricVista_RnD_Automation_Master_v2_4_Professional.pdfPDF**
+**The fundamental architectural law:** The NestJS backend owns transactions, business rules, and authoritative state in AWS RDS PostgreSQL. n8n owns business-process orchestration, external integrations, multi-channel notifications, CRM journeys, and operational retries. The AI Gateway provides bounded intelligence without ever deciding transactional outcomes or permissions.
 
-# 2. FINAL AUTOMATION PRINCIPLE
+---
 
-**AuricVista must not build hundreds of disconnected workflows.**
+# 2. MASTER SYSTEM RESPONSIBILITY & SOURCE-OF-TRUTH MATRIX
 
-The automation architecture should be:
+To maintain complete cross-PRD consistency, the authoritative boundaries established in Backend PRD v2.1 and `security.md` are strictly observed:
 
 ```text
-CENTRAL EVENT ORCHESTRATOR
+┌───────────────────────────┬───────────────────────────────────────────┬─────────────────────────┐
+│ System / Component        │ Primary Architectural Responsibility      │ Source of Truth?        │
+├───────────────────────────┼───────────────────────────────────────────┼─────────────────────────┤
+│ **AWS RDS PostgreSQL**    │ All core business state, transactions,    │ **YES (AUTHORITATIVE)** │
+│                           │ bookings, inventory, wallets, users, SOS  │                         │
+│ **Amazon S3**             │ Media files, property photos, documents   │ **YES (Object Assets)** │
+│ **Redis (ElastiCache)**   │ Session cache, rate limits, queues, locks │ **NO (Ephemeral)**      │
+│ **Firebase Auth**         │ Social/phone identity provider            │ **Identity Provider**   │
+│ **Firebase FCM**          │ Mobile/web push notification delivery     │ **NO (Transport)**      │
+│ **Firebase Realtime/DB**  │ Ephemeral presence / transient sync only  │ **NO (Ephemeral)**      │
+│ **Cloudflare**            │ Edge WAF, DDoS mitigation, DNS, static CDN│ **NO (Edge Gate)**      │
+│ **Google Maps Platform**  │ Geographic search, geocoding, routes, ETA │ **NO (External Intel)** │
+│ **Google Photoreal 3D**   │ 3D terrain and landscape visualization    │ **NO (Visualization)**  │
+│ **n8n Automation Engine** │ Event-driven workflow orchestration       │ **NO (Orchestration)**  │
+│ **Central AI Gateway**    │ LLM prompt compilation & tool mediation   │ **NO (Intelligence)**   │
+│ **Razorpay / Stripe**     │ Payment execution & banking rails         │ **Provider Transaction  │
+│                           │                                           │ + Backend Auth Ledger** │
+│ **HyperVerge / Veriff**   │ Identity document verification engine     │ **Provider Result       │
+│                           │                                           │ + Backend KYC State**   │
+└───────────────────────────┴───────────────────────────────────────────┴─────────────────────────┘
+```
+
+---
+
+# 3. FINAL AUTOMATION PRINCIPLES
+
+## AuricVista must not build hundreds of disconnected, brittle workflows.
+
+The automation architecture follows a 5-tier hierarchical model:
+
+```text
+1. CENTRAL EVENT ORCHESTRATOR (Event Ingestion, Signature Verification, Deduplication)
             │
             ▼
-      DOMAIN ENGINES
-            │
- ┌──────────┼──────────┐
- ▼          ▼          ▼
-Stay      Trip      Matching
-Safety    CRM       Property
+2. DOMAIN ENGINES (Stay, Trip, Matching, Safety, CRM, Property, Partner)
             │
             ▼
-INTELLIGENCE ENGINES
-            │
- ┌──────────┼──────────┐
- ▼          ▼          ▼
-Intent    Ranking    AI Agent
-Fraud     Memory     Recommendations
+3. INTELLIGENCE ENGINES (Intent, Ranking, Personal AI Companion, Moderation)
             │
             ▼
-       CONTROL LAYER
-            │
- ┌──────────┼──────────┐
- ▼          ▼          ▼
-Consent   Approval   Security
-Admin     Audit      Escalation
+4. CONTROL LAYER (Consent, Human Approval, Security Signatures, Escalation)
             │
             ▼
-     OPERATIONS LAYER
-            │
- ┌──────────┼──────────┐
- ▼          ▼          ▼
-Monitoring Retry     Cost
-Analytics Recovery   Alerts
+5. OPERATIONS LAYER (Monitoring, Dead-Letter Queues, Retries, Cost Alerts)
 ```
 
-This structure directly follows the R&D architecture of a central orchestrator, domain engines, intelligence engines, control layer and operations layer.
+---
 
-# 3. AUTOMATION RESPONSIBILITY BOUNDARY
+# 4. AUTOMATION RESPONSIBILITY BOUNDARY
 
-This is the most important rule in PRD 3.
-
-## Backend owns
-
+## 4.1 What Backend Owns (Authoritative System of Record)
 ```text
-Authentication
-Authorization
-Users
-KYC state
-Database state
-Inventory
-Booking transactions
-Payments
-Financial calculations
-Trip state
-Group membership
-Matching state
-Chat permissions
-SOS incidents
-Emergency state
+Authentication & Session Lifecycle
+Authorization & RBAC (9-Role Model)
+User Identity & Preferences
+KYC Legal State & Trust Scores
+Database State (PostgreSQL ACID Transactions)
+Property Calendar & Inventory Locks
+Booking State Machines & Payout Calculations
+Payment Capture Verification & Ledger
+Trip State & Collaborative Permissions
+Group Memberships & Waitlists
+Matching State & Swipe Records
+Chat Permissions & Realtime Socket Routing
+Deterministic SOS Incident State & GPS Sanity
 ```
 
-## n8n owns
-
+## 4.2 What n8n Owns (Orchestration & Workflow Coordination)
 ```text
-Event orchestration
-Scheduled workflows
-Notifications
-CRM
-Re-engagement
-Partner follow-ups
-Approval routing
-Async integrations
-Retries
-Operational workflows
-Workflow escalation
+Event Intake & Routing
+Scheduled Jobs (Stale inventory checks, inactive group alerts)
+Multi-Channel Notification Dispatch (FCM, Email, SMS, WhatsApp)
+CRM Lifecycle Journeys & Re-Engagement Campaigns
+Partner Inquiry & Lead Routing
+Human Approval Queue Orchestration
+Asynchronous Third-Party Integrations
+Automated Retry Policies & Exponential Backoff
+Dead-Letter Queue (DLQ) Exception Routing
+Operational Failure Alerting
 ```
 
-## AI owns
-
+## 4.3 What AI Owns (Intelligence & Synthesis)
 ```text
-Intent understanding
-Recommendations
-Summaries
-Planning
-Natural-language interaction
-Classification
-Bounded tool selection
-Explanations
+Natural-Language Intent Understanding
+Itinerary Drafting & Budget Recommendations
+Review & Journal Reflection Summarization
+Dynamic Travel Tip Generation
+Classification of Unstructured Support Queries
+Bounded Tool Selection (Executed via Backend AI Gateway)
 ```
 
-## External systems provide
-
+## 4.4 What External Systems Provide (Infrastructure & Rail Services)
 ```text
-KYC
-Maps
-Weather
-Payments
-Messaging
-Speech
-Moderation
+KYC Document OCR & Facial Biometrics (HyperVerge / Veriff)
+Spatial Intelligence & Turn-by-Turn Routes (Google Maps Platform)
+Live Weather Forecasts (OpenWeather / IMD APIs)
+Payment Rails (Razorpay / Stripe)
+Messaging Infrastructure (Firebase FCM, Twilio, WhatsApp Cloud API, AWS SES)
 ```
 
-The source architecture specifically states that transaction-critical, high-frequency and latency-sensitive operations remain in the backend, while n8n handles orchestration, asynchronous business processes, integrations, CRM, notifications, scheduled jobs and AI tool coordination. Auric_Travel_AI_Features.pdfPDF
+---
 
-# 4. WHAT MUST NEVER BE LEFT TO N8N
+# 5. WHAT MUST NEVER BE LEFT TO N8N
 
-n8n must not become the authoritative source of truth for:
+n8n is an external orchestrator. It must NEVER become the authoritative source of truth for:
+- Booking confirmation or room inventory allocation,
+- Payment capture verification or refund authorization,
+- KYC document compliance approval,
+- User role elevation or permission changes,
+- Bilateral match creation or group membership approval,
+- Virtual wallet split calculations or balance updates,
+- Emergency SOS incident creation, classification, or closure.
 
-- booking confirmation,
-- inventory availability,
-- payment success,
-- refund authority,
-- KYC verification truth,
-- user permissions,
-- match ownership,
-- group membership,
-- financial calculations,
-- SOS incident truth.
-Bad architecture:
-
+### ❌ Anti-Pattern (Strictly Prohibited):
 ```text
-User
- ↓
-Frontend
- ↓
-n8n
- ↓
-Database directly
+Frontend ──▶ n8n Webhook ──▶ Direct PostgreSQL Connection / Mutation
 ```
 
-Correct architecture:
-
+### ✅ Authoritative Pattern (Mandatory):
 ```text
-User
- ↓
-Frontend
- ↓
-Backend API
- ↓
-Validation
- ↓
-Database Transaction
- ↓
-Domain Event
- ↓
-n8n
- ↓
-Automation
+Frontend ──▶ NestJS API ──▶ DB Transaction ──▶ Outbox Event ──▶ SQS/BullMQ ──▶ n8n ──▶ Controlled API Update
 ```
 
-The R&D conclusion is clear: AuricVista should not put the entire application inside n8n; the strongest production boundary keeps backend authoritative and uses n8n to coordinate meaningful business processes.
+---
 
-# 5. PRIMARY AUTOMATION PLATFORM
+# 6. PRIMARY AUTOMATION PLATFORM — n8n ON AWS
 
-## Selected Platform: n8n
+## 6.1 Selected Platform: Self-Hosted n8n on AWS
+AuricVista deploys **self-hosted n8n** running on **AWS ECS Fargate** in the private application subnet of the AuricVista VPC:
+- **Dedicated Worker Architecture:** Decouples the n8n primary editor from execution workers.
+- **PostgreSQL Workflow State:** Workflows, execution logs, and credentials reside in a dedicated RDS PostgreSQL schema/database separate from the core business database.
+- **Redis Queue Scaling:** Uses Redis (AWS ElastiCache) for distributed job distribution across n8n workers.
+- **AWS Secrets Manager Integration:** All n8n credentials, webhook signing keys, and external API tokens are injected dynamically from AWS Secrets Manager.
 
-AuricVista will use:
-
-**n8n as the primary business automation and integration orchestration layer.**
-
-The R&D comparison selected n8n as the strongest primary fit because of integration capability, custom logic, self-hosting, webhook support and cost/control characteristics.
-
-# 6. WHY n8n IS USED
-
-n8n is appropriate for:
-
-- webhook triggers,
-- API orchestration,
-- scheduled workflows,
-- notifications,
-- CRM,
-- approval flows,
-- external integrations,
-- AI tool coordination,
-- operational automation.
-It is** not** selected as the core transactional engine.
+---
 
 # 7. HIGH-LEVEL AUTOMATION ARCHITECTURE
 
 ```text
-                         AURICVISTA
-                              │
-                              ▼
-                        REACT FRONTEND
-                              │
-                     User Interaction
-                              │
-                              ▼
-                     NESTJS BACKEND
-                              │
-                  Domain Event Created
-                              │
-                    Transactional Outbox
-                              │
-                              ▼
-                       EVENT QUEUE
-                              │
-                              ▼
-                 AUTOMATION EVENT INTAKE
-                              │
-                              ▼
-                 CENTRAL EVENT ORCHESTRATOR
-                              │
-          ┌───────────────────┼───────────────────┐
-          │                   │                   │
-          ▼                   ▼                   ▼
-      Stay Engine         Trip Engine      Matching Engine
-      CRM Engine          Safety Engine    Partner Engine
-          │                   │                   │
-          └───────────────────┼───────────────────┘
-                              │
-                              ▼
-                     INTELLIGENCE LAYER
-                              │
-             ┌────────────────┼────────────────┐
-             ▼                ▼                ▼
-           AI Agent         Ranking          Intent
-             │                │                │
-                              ▼
-                     EXTERNAL PROVIDERS
-                              │
-                              ▼
-                   CONTROLLED BACKEND APIs
-                              │
-                              ▼
-                       STATE UPDATE
-                              │
-                              ▼
-                    REALTIME FRONTEND
+                         AURICVISTA USER
+                               │
+                               ▼
+                         REACT FRONTEND
+                               │
+                      User Interaction
+                               │
+                               ▼
+                      NESTJS BACKEND GATEWAY
+                               │
+                      ACID Database Mutation
+                               │
+                     Transactional Outbox Record
+                               │
+                               ▼
+                    EVENT QUEUE (BullMQ / SQS)
+                               │
+                               ▼
+                    n8n CENTRAL EVENT INTAKE
+                               │
+                   HMAC-SHA256 Signature Checked
+                   Timestamp Replay Checked (300s)
+                   Idempotency Dedup Checked
+                               │
+                               ▼
+                   CENTRAL EVENT ROUTER
+                               │
+           ┌───────────────────┼───────────────────┐
+           │                   │                   │
+           ▼                   ▼                   ▼
+       Stay Engine         Trip Engine      Matching Engine
+       CRM Engine          Safety Engine    Partner Engine
+           │                   │                   │
+           └───────────────────┼───────────────────┘
+                               │
+                               ▼
+                      INTELLIGENCE LAYER
+                               │
+              ┌────────────────┼────────────────┐
+              ▼                ▼                ▼
+            AI Agent         Ranking          Intent
+              │                │                │
+                               ▼
+                      EXTERNAL PROVIDERS
+              (FCM, Twilio, WhatsApp, SES, Google Maps)
+                               │
+                               ▼
+                    CONTROLLED BACKEND APIs
+              (Signed / Scoped Automation Tokens)
+                               │
+                               ▼
+                   POSTGRESQL AUTHORITATIVE STATE
+                               │
+                               ▼
+                     REALTIME FRONTEND SYNC
 ```
+
+---
 
 # 8. CENTRAL EVENT CONTRACT
 
-Every automation-triggering event must have a standard structure.
+Every event emitted by the NestJS backend to n8n must strictly conform to the following JSON schema:
 
-```text
+```json
 {
-  "event_id": "evt_123456",
+  "event_id": "evt_998124_crg",
   "event_name": "booking.confirmed",
   "event_version": "1.0",
-  "timestamp": "2026-09-01T10:00:00Z",
-  "source": "booking-service",
-  "correlation_id": "corr_abc123",
-  "idempotency_key": "booking_123_confirmed",
-  "user_id": "user_123",
-  "payload": {}
+  "timestamp": "2026-09-01T10:00:00.000Z",
+  "source": "auricvista-backend",
+  "correlation_id": "corr_9a8b7c6d",
+  "idempotency_key": "booking_AV-RES-829102_confirmed",
+  "user_id": "usr_9182",
+  "payload": {
+    "booking_id": "AV-RES-829102",
+    "property_id": "prop_tamara_coorg",
+    "check_in": "2026-09-15",
+    "check_out": "2026-09-18",
+    "total_amount": 73500,
+    "currency": "INR",
+    "guest_count": 2,
+    "voucher_code": "AV-CRG-82910"
+  }
 }
 ```
 
-Mandatory fields:
+### Mandatory Event Headers & Fields:
+- `X-Auric-Signature`: `HMAC-SHA256(webhook_secret, timestamp + "." + raw_body)`
+- `X-Auric-Timestamp`: ISO 8601 UTC timestamp ($TTL \le 300\text{ seconds}$)
+- `event_id`: Unique UUID generated by the backend outbox table
+- `correlation_id`: End-to-end trace identifier linking frontend request, backend transaction, n8n execution, and third-party delivery logs
+- `idempotency_key`: Domain-level deduplication key preventing duplicate processing during retries
 
-| Field | Purpose |
-| --- | --- |
-| event_id | Unique event identity |
-| event_name | Stable event type |
-| event_version | Payload compatibility |
-| timestamp | Event timing |
-| source | Originating backend domain |
-| correlation_id | End-to-end tracing |
-| idempotency_key | Duplicate prevention |
-| payload | Domain-specific data |
-
-The R&D production checklist explicitly requires stable event names, payload versions, timestamps, source, correlation IDs and idempotency keys. AuricVista_RnD_Automation_Master_v2_4_Professional.pdfPDF
+---
 
 # 9. CENTRAL AUTOMATION EVENT INTAKE
 
-All events should enter through a controlled intake layer.
-
 ```text
-Backend Event
-      ↓
-Webhook / Queue Consumer
-      ↓
-Authentication / Signature Check
-      ↓
-Schema Validation
-      ↓
-Duplicate Check
-      ↓
-Event Classification
-      ↓
-Domain Router
-      ↓
-Specific Workflow
+Backend Event Emitted
+        ↓
+n8n Webhook Intake Endpoint
+        ↓
+1. Validate HMAC-SHA256 Signature (Reject if invalid)
+        ↓
+2. Validate Timestamp (Reject if older than 300s)
+        ↓
+3. Check Idempotency Key in Redis Cache (If exists, return HTTP 200 STOP)
+        ↓
+4. Validate Payload JSON Schema
+        ↓
+5. Route to Domain Workflow
 ```
 
-The central orchestrator should not contain all business logic.
+---
 
-Its responsibility is:
-
-- receive event,
-- validate event,
-- identify domain,
-- route to the correct workflow.
 # 10. DOMAIN AUTOMATION ENGINES
 
-AuricVista automation will be organized into the following engines:
+AuricVista automation is partitioned into 20 cohesive domain engines:
+1. **Identity & Onboarding Engine**
+2. **KYC & Trust Verification Engine**
+3. **Stay & Property Discovery Engine**
+4. **Booking Lifecycle Engine**
+5. **Tourism & Itinerary Engine**
+6. **Trip Collaboration Engine**
+7. **Matching & Social Engine**
+8. **Group & Community Engine**
+9. **Central Communication Engine**
+10. **CRM & Intent Re-Engagement Engine**
+11. **Virtual Trip Wallet & Budget Engine**
+12. **Safety Monitoring & Check-In Engine**
+13. **Deterministic Emergency & SOS Engine**
+14. **Property Partner Operations Engine**
+15. **Personal AI Agent Orchestration Engine**
+16. **Search Intelligence Engine**
+17. **Content Moderation & Trust Engine**
+18. **Admin & Operational Console Engine**
+19. **Recovery, DLQ & Failure Engine**
+20. **Analytics & Outcome Telemetry Engine**
 
-```text
-01. Identity & Onboarding Engine
-02. KYC & Trust Engine
-03. Stay & Property Engine
-04. Booking Lifecycle Engine
-05. Tourism & Itinerary Engine
-06. Trip Automation Engine
-07. Matching Engine
-08. Group & Community Engine
-09. Communication Engine
-10. CRM & Intent Engine
-11. Wallet & Budget Engine
-12. Safety Monitoring Engine
-13. Emergency & SOS Engine
-14. Partner Operations Engine
-15. AI Agent Orchestration Engine
-16. Search Intelligence Engine
-17. Moderation & Trust Engine
-18. Admin & Operations Engine
-19. Recovery & Failure Engine
-20. Analytics & Experimentation Engine
-```
+---
 
 # 11. FRONTEND → BACKEND → AUTOMATION CONNECTION MODEL
 
-Every automation must be traceable to a real product action.
-
-The standard pattern:
-
 ```text
-FRONTEND BUTTON
-      ↓
-BACKEND API
-      ↓
-VALIDATION
-      ↓
-DATABASE STATE
-      ↓
-DOMAIN EVENT
-      ↓
-AUTOMATION WORKFLOW
-      ↓
-EXTERNAL ACTION / AI / NOTIFICATION
-      ↓
-BACKEND UPDATE IF REQUIRED
-      ↓
-FRONTEND REALTIME UPDATE
+┌────────────────┐        1. Action Submitted         ┌────────────────┐
+│ REACT FRONTEND │───────────────────────────────────▶│ NESTJS BACKEND │
+└────────────────┘                                    └───────┬────────┘
+        ▲                                                     │ 2. Validates & Writes
+        │                                                     │    Atomic DB Record
+        │ 6. Realtime Push / WebSocket                        ▼
+        │    State Synchronized                       ┌────────────────┐
+        │                                             │ AWS POSTGRESQL │
+        │                                             │ (Outbox Event) │
+        │                                             └───────┬────────┘
+        │                                                     │ 3. Asynchronous Relay
+        │         5. Scoped Callback                          ▼
+        │            Update State                     ┌────────────────┐
+        └─────────────────────────────────────────────│  n8n WORKFLOW  │
+                                                      └───────┬────────┘
+                                                              │ 4. Coordinates APIs
+                                                              ▼
+                                                      ┌────────────────┐
+                                                      │ EXTERNAL APIS  │
+                                                      │ (FCM, SMS, WA) │
+                                                      └────────────────┘
 ```
 
-There should never be an ambiguous workflow where developers cannot identify:
+---
 
-- what triggered it,
-- who owns the state,
-- what happens on failure,
-- how it is retried.
 # 12. AUTOMATION ENGINE 1 — USER ONBOARDING
 
-## Frontend Trigger
+- **Trigger:** `user.created` domain event from Backend `AuthModule`.
+- **Workflow Steps:**
+  1. Inspect onboarding completion metadata (`has_profile`, `has_preferences`, `is_verified`).
+  2. If missing preferences, schedule a friendly push notification (FCM) after 2 hours.
+  3. If user engages, terminate reminder sequence immediately.
+  4. Max onboarding reminder sequence: 3 notifications over 5 days; automatic suppression thereafter.
 
-User completes:
+---
 
-```text
-Sign Up
-        ↓
-Account Created
-```
+# 13. AUTOMATION ENGINE 2 — KYC & TRUST NOTIFICATIONS
 
-## Backend Event
+- **Trigger:** `kyc.submitted`, `kyc.verified`, `kyc.rejected`, `kyc.review_required`.
+- **Workflow Steps:**
+  1. `kyc.verified` $\to$ Dispatches celebratory push (FCM) & WhatsApp message ("Your identity is verified. Private Karnataka sanctuary bookings are now unlocked.").
+  2. `kyc.rejected` $\to$ Dispatches helpful guidance email with actionable reason (e.g. "Blurry photo; please re-upload in clear lighting").
+  3. `kyc.review_required` $\to$ Enqueues task in the Trust Moderator Slack/Admin channel with a link to the secure admin console.
+- **Strict Data Minimization:** n8n NEVER receives raw identity documents, full 12-digit Aadhaar numbers, or PAN scans. Zero PII storage in n8n execution history.
 
-```text
-user.created
-```
+---
 
-## Automation Flow
+# 14. AUTOMATION ENGINE 3 — SEARCH → INTENT CAPTURE
 
-```text
-user.created
-      ↓
-Check onboarding state
-      ↓
-Determine missing steps
-      ↓
-Create onboarding journey
-      ↓
-Send appropriate next-step prompt
-      ↓
-Wait for action
-      ↓
-Check completion
-      ↓
-Stop completed reminders
-```
+- **Trigger:** `search.performed` (aggregated when user searches $> 3$ stays in a destination without booking).
+- **Workflow:** Detects high purchase intent for a destination (e.g. "Coorg coffee estates") and adds destination tag to CRM segment.
 
-## Possible Onboarding Steps
+---
 
-```text
-Account Created
-     ↓
-Profile
-     ↓
-Preferences
-     ↓
-Verification if required
-     ↓
-First Intent Selection
-     ↓
-Feature Discovery
-```
+# 15. AUTOMATION ENGINE 4 — ABANDONED JOURNEY RE-ENGAGEMENT
 
-## Important Rule
+- **Trigger:** `checkout.hold_expired` (User held room inventory in Step 4/5 of `BookingModal` but did not complete payment within 15 minutes).
+- **Workflow:**
+  1. Waits 45 minutes to avoid annoying active shoppers.
+  2. Checks if user completed any other booking in the interim. If YES, abort.
+  3. If NO, dispatches a personalized WhatsApp / Push re-engagement pass: *"Still planning your Coorg coffee escape? Your dates are still open."*
+  4. Frequency Cap: Maximum 1 abandoned checkout reminder per user per 14 days.
 
-Do not spam every user.
+---
 
-The automation must stop reminders when:
+# 16. AUTOMATION ENGINE 5 — PROPERTY DISCOVERY & HOST ALERTS
 
-- onboarding completed,
-- user explicitly dismissed,
-- user becomes inactive beyond campaign window.
-# 13. AUTOMATION ENGINE 2 — KYC & TRUST
+- **Trigger:** `property.submitted_for_review`.
+- **Workflow:** Alerts Content & Trust team; runs automated address geocoding validation via Google Geocoding API; enqueues human property onboarding review.
 
-## Frontend Trigger
+---
 
-```text
-Complete Verification
-```
-
-## Backend
-
-```text
-POST /kyc/start
-```
-
-## Event
-
-```text
-kyc.submitted
-```
-
-## Workflow
-
-```text
-kyc.submitted
-      ↓
-Provider Processing
-      ↓
-Webhook Received by Backend
-      ↓
-Backend Validates Result
-      ↓
-KYC State Updated
-      ↓
-kyc.verified / kyc.requires_action
-      ↓
-Automation
-      ↓
-User Notification
-```
-
-## Exception Workflow
-
-```text
-KYC Failure
-      ↓
-Check Provider Error
-      ↓
-Temporary Failure?
-   ┌──────┴──────┐
-  YES           NO
-   ↓             ↓
-Retry        Create Review Case
-   ↓             ↓
-Success?     Human Review Queue
-```
-
-## Automation Responsibilities
-
-- status notification,
-- missing document reminders,
-- exception routing,
-- manual review alerts,
-- retry scheduling.
-The source responsibility matrix assigns KYC exception workflows and onboarding notifications to n8n, while the backend retains user identity and verification state.
-
-# 14. AUTOMATION ENGINE 3 — SEARCH → INTENT
-
-AuricVista should understand meaningful user intent.
-
-Example:
-
-```text
-User searches:
-"Affordable PG near Christ University"
-```
-
-Backend records:
-
-```text
-search.performed
-```
-
-Automation/intelligence may evaluate:
-
-- query intent,
-- repeat searches,
-- filters,
-- property views,
-- saves,
-- booking attempts.
-## Intent Flow
-
-```text
-Search
-  ↓
-Event Log
-  ↓
-Intent Engine
-  ↓
-Intent Strength Score
-  ↓
-Eligible Recommendation?
-  ↓
-YES
-  ↓
-Relevant Result / Offer
-```
-
-The R&D defines intent detection as a reusable engine across Stay, Tourism, PG, Group, Booking and trip-planning journeys rather than separate abandonment logic for each product.
-
-# 15. AUTOMATION ENGINE 4 — ABANDONED JOURNEY
-
-Applicable to:
-
-```text
-Stay Search
-PG Search
-Booking
-Group Join
-Trip Planning
-```
-
-## Example
-
-```text
-User Searches
-      ↓
-Views Property
-      ↓
-Saves Property
-      ↓
-Starts Booking
-      ↓
-Leaves
-      ↓
-Intent Detection
-      ↓
-Wait Period
-      ↓
-Still Incomplete?
-      ↓
-YES
-      ↓
-Relevant Reminder
-```
-
-## Suppression Rules
-
-Do not send if:
-
-- booking completed,
-- user explicitly rejected,
-- property unavailable,
-- notification limit reached,
-- user opted out.
-# 16. AUTOMATION ENGINE 5 — PROPERTY DISCOVERY
-
-Frontend action:
-
-```text
-View Property
-Save Property
-Compare Property
-Start Booking
-```
-
-Backend events:
-
-```text
-property.viewed
-property.saved
-property.compared
-booking.started
-```
-
-Automation can:
-
-- track intent,
-- detect repeated interest,
-- trigger relevant follow-up,
-- notify partner about serious inquiry where appropriate.
-Automation must not independently alter property inventory.
-
-# 17. AUTOMATION ENGINE 6 — BOOKING LIFECYCLE
-
-## Trigger
+# 17. AUTOMATION ENGINE 6 — BOOKING LIFECYCLE AUTOMATION
 
 ```text
 booking.confirmed
-```
-
-## Workflow
-
-```text
-booking.confirmed
-       ↓
-Create Communication Plan
-       ↓
-Confirmation Notification
-       ↓
-Add Booking to Trip Context
-       ↓
-Schedule Check-In Reminder
-       ↓
-Schedule Departure Reminder
-       ↓
-After Stay → Review Request
-```
-
-## Booking Cancellation
-
-```text
-booking.cancelled
-       ↓
-Check Refund State
-       ↓
-Notify User
-       ↓
-Cancel Scheduled Reminders
-       ↓
-Trigger Waitlist if Applicable
-       ↓
-Update CRM State
-```
-
-The R&D responsibility mapping assigns booking transaction state to backend and sync, notifications, CRM and follow-up to automation. Auric_Travel_AI_Features.pdfPDF
-
-# 18. AUTOMATION ENGINE 7 — TOURISM & ITINERARY
-
-Frontend actions:
-
-```text
-Create Trip
-Add Place
-Save Place
-Generate Plan
-Confirm Day Plan
-```
-
-Backend events:
-
-```text
-trip.created
-itinerary.item_added
-itinerary.updated
-```
-
-## Scheduled Automation
-
-```text
-Trip Upcoming
-      ↓
-Weather Check
-      ↓
-Traffic / Route Context
-      ↓
-Important Change?
-   ┌──────┴──────┐
-  NO            YES
-   ↓             ↓
-Nothing      Notify User
-```
-
-## Example
-
-```text
-Trip: Coorg
-Day: 2
-Place: Abbey Falls
-24 Hours Before
-      ↓
-Weather Check
-      ↓
-Heavy Rain?
-      ↓
-YES
-      ↓
-Send Contextual Alert
-      ↓
-Suggest Alternative
-```
-
-The automation layer schedules weather checks, traffic buffers and departure reminders, while itinerary CRUD and booking ties remain backend responsibilities.
-
-# 19. AUTOMATION ENGINE 8 — GROUP CREATION
-
-Frontend:
-
-```text
-Create Group
-```
-
-Backend:
-
-```text
-POST /groups
-```
-
-Event:
-
-```text
-group.created
-```
-
-## Automation
-
-```text
-group.created
-      ↓
-Check Required Information
-      ↓
-Check Group Readiness
-      ↓
-Generate Recruitment Plan
-      ↓
-Activate Discovery
-      ↓
-Monitor Membership
-```
-
-# 20. GROUP RECRUITMENT AUTOMATION
-
-When group capacity is not filled:
-
-```text
-Group Created
-      ↓
-Recruitment Period
-      ↓
-Membership Progress
-      ↓
-Below Threshold?
-      ↓
-YES
-      ↓
-Discovery Boost / Reminder
-```
-
-The backend still owns:
-
-- membership,
-- eligibility,
-- join requests.
-Automation handles:
-
-- recruitment alerts,
-- reminders,
-- waitlist escalation,
-- inactivity checks.
-# 21. AUTOMATION ENGINE 9 — GROUP INACTIVITY
-
-Scheduled workflow:
-
-```text
-Every Defined Interval
-      ↓
-Check Group Activity
-      ↓
-Inactive Beyond Threshold?
-      ↓
-YES
-      ↓
-Check Suppression Rules
-      ↓
-Send Group Prompt
-```
-
-Example:
-
-“Your Coorg group hasn't finalized Day 2 yet.”
-
-Do not:
-
-- spam inactive users,
-- send duplicate reminders,
-- trigger every day without policy.
-# 22. AUTOMATION ENGINE 10 — GROUP DECISION SUPPORT
-
-Frontend:
-
-```text
-Create Poll
-Vote
-Propose Activity
-```
-
-Backend events:
-
-```text
-proposal.created
-vote.updated
-```
-
-Automation:
-
-```text
-Proposal Created
-      ↓
-Wait for Voting Window
-      ↓
-Enough Votes?
-   ┌──────┴──────┐
-  YES           NO
-   ↓             ↓
-Notify        Reminder
-Decision
-```
-
-# 23. AUTOMATION ENGINE 11 — MATCHING
-
-Frontend:
-
-```text
-Swipe Right
-```
-
-Backend:
-
-```text
-POST /matches/swipe
-```
-
-Backend decides:
-
-```text
-Mutual Match?
-```
-
-If yes:
-
-```text
-match.created
-```
-
-Automation:
-
-```text
-match.created
-      ↓
-Create Notification
-      ↓
-Check Communication Permissions
-      ↓
-Deliver Match Notification
-      ↓
-Optional Onboarding Prompt
-```
-
-Automation does not create the match.
-
-# 24. MATCH CONVERSATION ACTIVATION
-
-After a match:
-
-```text
-match.created
-      ↓
-No First Message?
-      ↓
-Wait
-      ↓
-Still No Interaction?
-      ↓
-Optional Low-Frequency Prompt
-```
-
-Example:
-
-“You both share an interest in budget travel to the mountains.”
-
-This must remain optional and suppression-controlled.
-
-# 25. FLATMATE MATCHING AUTOMATION
-
-Backend owns:
-
-- profiles,
-- preferences,
-- swipe history,
-- match state.
-AI/intelligence can produce:
-
-```text
-Compatibility Score
-Lifestyle Similarity
-Budget Compatibility
-Location Fit
-```
-
-Automation can:
-
-- notify users,
-- schedule reminders,
-- follow up on pending conversations.
-The source architecture explicitly places vibe compatibility and flatmate match scoring in the AI/external intelligence layer while matching state remains backend-owned.
-
-# 26. AUTOMATION ENGINE 12 — CHAT & COMMUNICATION
-
-The automation layer should not replace the realtime chat system.
-
-Chat messages should flow directly:
-
-```text
-User
- ↓
-Backend
- ↓
-Database
- ↓
-WebSocket
- ↓
-Recipient
-```
-
-Automation is used for secondary events:
-
-- unread reminders,
-- group announcements,
-- support escalation,
-- safety communication.
-# 27. CENTRAL COMMUNICATION ENGINE
-
-All domains must use one communication policy.
-
-Supported channels:
-
-```text
-IN_APP
-PUSH
-EMAIL
-SMS
-WHATSAPP
-```
-
-The R&D specifically defines a centralized communication layer for booking confirmations, trip reminders, itinerary changes, group updates, cancellations, KYC status, support and feedback, with duplicate suppression and quiet periods.
-
-# 28. CHANNEL SELECTION ENGINE
-
-The system should decide based on:
-
-```text
-Importance
-Urgency
-User Preference
-Consent
-Quiet Hours
-Previous Delivery
-Action Completed?
-```
-
-Example:
-
-### Normal
-
-```text
-Trip Reminder
-→ Push
-```
-
-### Important
-
-```text
-Booking Confirmation
-→ In-App + Push + Email
-```
-
-### Critical opted-in escalation
-
-```text
-Safety Incident
-→ Push + SMS / Emergency Contact
-```
-
-WhatsApp should remain reserved for important and opted-in communication.
-
-# 29. NOTIFICATION SUPPRESSION ENGINE
-
-Every automation must check:
-
-```text
-Has User Already Completed Action?
-Has Notification Already Been Sent?
-Is User in Quiet Period?
-Has User Opted Out?
-Has Notification Limit Been Reached?
-```
-
-Then:
-
-```text
-SEND
-or
-SUPPRESS
-```
-
-This prevents notification fatigue.
-
-# 30. AUTOMATION ENGINE 13 — TRIP WALLET
-
-Frontend actions:
-
-```text
-Add Expense
-Split Expense
-Set Budget
-```
-
-Backend events:
-
-```text
-expense.created
-budget.updated
-budget.threshold_reached
-```
-
-## Automation
-
-```text
-Expense Created
-      ↓
-Budget Recalculated by Backend
-      ↓
-Threshold Reached?
-      ↓
-YES
-      ↓
-Budget Alert
-```
-
-## Settlement Reminder
-
-```text
-Trip Completed
-      ↓
-Outstanding Balances?
-      ↓
-YES
-      ↓
-Settlement Reminder
-```
-
-AI may categorize expenses or parse voice, but split math remains deterministic backend logic.
-
-# 31. AUTOMATION ENGINE 14 — SAFETY MONITORING
-
-This is different from SOS.
-
-Safety monitoring supports active trips.
-
-Possible inputs:
-
-```text
-Trip Schedule
-Check-In Time
-User Response
-Optional Location Context
-Itinerary Progress
-```
-
-## Flow
-
-```text
-Safety Mode Enabled
-      ↓
-Scheduled Check-In
-      ↓
-User Responds?
-   ┌──────┴──────┐
-  YES           NO
-   ↓             ↓
-Update       Gentle Reminder
-Status            ↓
-              Still Missing?
-                   ↓
-              Controlled Escalation
-```
-
-The R&D explicitly states that normal delays should not automatically become emergencies and requires duplicate suppression and controlled escalation.
-
-# 32. AUTOMATION ENGINE 15 — SOS & EMERGENCY
-
-Frontend button:
-
-```text
-🚨 SOS
-```
-
-Backend:
-
-```text
-POST /safety/sos
-```
-
-Backend immediately creates:
-
-```text
-SOS INCIDENT
-```
-
-Then:
-
-```text
-sos.created
-```
-
-triggers automation.
-
-# 33. SOS AUTOMATION FLOW
-
-```text
-SOS BUTTON
-     ↓
-BACKEND
-     ↓
-Create Incident
-     ↓
-Capture Authorized Context
-     ↓
-sos.created
-     ↓
-AUTOMATION
-     ↓
-Notify Admin Emergency Queue
-     ↓
-Notify Emergency Contacts
-     ↓
-Send Location Context Where Authorized
-     ↓
-Activate Communication Fallback
-     ↓
-Track Delivery
-     ↓
-Failure Escalation
-```
-
-# 34. EMERGENCY AI ASSISTANT
-
-AI can assist with:
-
-- concise guidance,
-- emergency procedure retrieval,
-- nearby resource information,
-- speech-to-text.
-AI must not:
-
-- independently classify an emergency as resolved,
-- decide whether official help is unnecessary,
-- override human operators.
-The R&D explicitly defines SOS as a deterministic rule-first pipeline where AI assists with information and official responders/human admins remain authoritative. AuricVista_RnD finallll.pdfPDF
-
-# 35. LOCATION-BASED EMERGENCY AUTOMATION
-
-Where authorized:
-
-```text
-SOS
- ↓
-Location Context
- ↓
-Active Trip / Stay Context
- ↓
-Nearby Emergency Resources
- ↓
-Authorized Contact Options
- ↓
-Admin Queue
-```
-
-Fallback:
-
-```text
-Primary Provider Failure
         ↓
-Secondary Contact Method
+1. Generate Pass PDF / Pass Voucher via Backend Service
         ↓
-Admin Alert
+2. Send Instant Push Notification via FCM
         ↓
-Incident Remains Open
+3. Send Transactional WhatsApp Message with Voucher Pass & Google Maps Directions
+        ↓
+4. Send Detailed Tax Invoice & Itinerary Summary via Amazon SES / SendGrid
+        ↓
+5. Schedule Pre-Arrival Briefing (Check-in - 48 Hours)
+        ↓
+6. Schedule Post-Trip Review & Reflection Prompt (Check-out + 24 Hours)
 ```
 
-# 36. AUTOMATION ENGINE 16 — PROPERTY PARTNER OPERATIONS
+---
 
-Partner events:
+# 18. AUTOMATION ENGINE 7 — TOURISM & ITINERARY ENHANCEMENT
+
+- **Trigger:** `trip.created`, `itinerary.activity_added`.
+- **Workflow:** Fetches seasonal weather guidance and local cultural festival advisories (e.g. Coorg harvest season, Hampi Utsav) to enrich the traveler's itinerary view.
+
+---
+
+# 19. AUTOMATION ENGINE 8 — GROUP CREATION & RECRUITMENT
+
+- **Trigger:** `group.created`, `group.member_requested`.
+- **Workflow:** Sends group host an instant notification when a traveler requests to join; dispatches recruitment share links to verified travel buddies.
+
+---
+
+# 20. AUTOMATION ENGINE 9 — GROUP INACTIVITY & DECISION SUPPORT
+
+- **Trigger:** Scheduled daily cron (10:00 AM IST) scanning active travel groups with upcoming departure dates ($< 14\text{ days}$) where no activity has been logged for 5 days.
+- **Workflow:** Posts a helpful AI prompt in the group chat: *"Your departure to Gokarna is in 10 days! Have you finalized Day 2 beach trekking? Tap to vote."*
+
+---
+
+# 21. AUTOMATION ENGINE 10 — MATCHING & CONNECTION ACTIVATION
+
+- **Trigger:** `matching.mutual_match` (Two travelers mutually swipe LIKE).
+- **Workflow:**
+  1. Immediately emits WebSocket event to both active clients.
+  2. Dispatches push notification: *"It's a Match! You and Priya both want to explore Kabini wildlife. Say hello!"*
+  3. Pre-populates conversation starter prompt based on shared travel interests.
+
+---
+
+# 22. AUTOMATION ENGINE 11 — FLATMATE MATCHING AUTOMATION
+
+- **Trigger:** `flatmate.match_found`.
+- **Workflow:** Evaluates co-living compatibility criteria (habits, budget, location) and alerts both digital nomads with a structured compatibility summary.
+
+---
+
+# 23. AUTOMATION ENGINE 12 — CHAT & COMMUNICATION ENGINE
+
+- **Trigger:** `chat.message_sent`.
+- **Workflow:** If the recipient is offline (no active WebSocket connection in Redis for $> 2\text{ minutes}$), dispatches an unobtrusive FCM push notification with masked preview.
+
+---
+
+# 24. CENTRAL COMMUNICATION & CHANNEL SELECTION ENGINE
 
 ```text
-property.created
-listing.submitted
-inventory.stale
-inquiry.created
-booking.confirmed
-guest.checkin_upcoming
-review.pending
+Domain Event
+      ↓
+Channel Selection Engine
+      ├── Is P0 Emergency? ───────────────▶ Immediate SMS + WhatsApp + Push (Bypass Quiet Hours)
+      ├── Is Transactional Booking? ──────▶ WhatsApp Pass + Email + Push
+      ├── Is Chat Notification? ──────────▶ FCM Push Only (Suppress if recipient online)
+      └── Is Marketing / Re-Engagement? ──▶ Check Opt-In & Quiet Hours (10 PM – 8 AM IST)
+                                                  │
+                                            Opted-In & Safe Hours
+                                                  │
+                                                  ▼
+                                            Push / WhatsApp
 ```
 
-## Listing Workflow
+---
+
+# 25. NOTIFICATION SUPPRESSION & ANTI-FATIGUE CONTROLS
+
+To guarantee travelers are never spammed:
+1. **Quiet Hours Enforcement:** No marketing or non-critical notification may be dispatched between 22:00 and 08:00 local time.
+2. **Global Velocity Cap:** Maximum 3 non-emergency notifications per user per 24-hour rolling window.
+3. **Duplicate Suppression Key:** `dedup_key = {user_id}:{notification_type}:{entity_id}:{date}` prevents multiple messages for the same event.
+
+---
+
+# 26. AUTOMATION ENGINE 13 — VIRTUAL TRIP WALLET & EXPENSES
+
+> [!IMPORTANT]
+> **Virtual Tracking Only:** AuricVista's wallet is a virtual expense contribution and split tracking system, NOT a licensed stored-value PPI/UPI wallet.
+
+- **Trigger:** `wallet.split_created`, `wallet.budget_threshold_reached`.
+- **Workflows:**
+  1. `budget.threshold_reached` ($> 85\%$ of target trip budget consumed) $\to$ Dispatches a gentle alert to the trip creator: *"You have utilized 85% of your ₹20,000 Coorg budget."*
+  2. `trip.completed` with outstanding split balances $\to$ Dispatches friendly settlement summary after 24 hours showing who owes what, with direct calculation summaries.
+
+---
+
+# 27. AUTOMATION ENGINE 14 — SAFETY MONITORING & SCHEDULED CHECK-INS
+
+- **Trigger:** `safety.checkin_scheduled` (Traveler opted into Safety Mode for a high-altitude trek or solo journey).
+- **Workflow:**
+  1. Sends check-in prompt at scheduled time (e.g. 18:00): *"Check in from your trek: Are you safely back at your stay?"*
+  2. If traveler clicks "I'm Safe", check-in completes.
+  3. If NO response after 45 minutes $\to$ Gentle follow-up notification.
+  4. If NO response after 90 minutes $\to$ Alerts emergency contacts with traveler's last verified check-in location and active itinerary context.
+
+---
+
+# 28. AUTOMATION ENGINE 15 — DETERMINISTIC SOS & EMERGENCY WORKFLOW
 
 ```text
-Partner Submits Listing
-       ↓
-Backend Creates Listing
-       ↓
-listing.submitted
-       ↓
-Automation
-       ↓
-Quality / Completeness Check
-       ↓
-Requires Human Review?
-       ↓
-Admin Queue
+User Triggers SOS in App / Web
+             │
+             ▼
+    NESTJS BACKEND GATEWAY
+             │
+    • Validates Authentication & GPS Coordinates
+    • Rate Limit Check (5 dispatches / 5 minutes)
+    • Duplicate Suppression Check (10-second window)
+    • Creates Authoritative `sos_incidents` Record
+    • Dispatches Atomic Outbox Event `sos.created`
+             │
+             ▼
+     P0 EMERGENCY WORKER (n8n / Dedicated Consumer)
+             │
+             ├───────────────────────────────────────────────────────┐
+             ▼                                                       ▼
+1. Dispatch Instant Priority SMS & WhatsApp             2. Escalate to Human Safety
+   to All Verified Emergency Contacts                      Operator Console in Admin
+   with Live Map Pin & Itinerary Context                   (Triggers Audio/Visual Alarm)
+             │                                                       │
+             ▼                                                       ▼
+3. Initiate Automated Voice Call Fallback               3. Coordinate Emergency Services
+   if SMS Unacknowledged within 3 Minutes                  (Police 112 / Forest Patrol)
 ```
 
-# 37. PROPERTY INQUIRY AUTOMATION
+### Critical SOS Operational Standards:
+- **100% Deterministic Execution:** Zero AI dependency. AI is strictly prohibited from evaluating, downgrading, or resolving an emergency incident.
+- **Emergency Priority Overrides:** SOS workflows bypass all marketing rate limits, quiet hours, and queue backlogs.
+- **Permanent Legal Audit Trail:** All dispatched alerts, delivery receipts, and coordinator actions are permanently logged in PostgreSQL `incident_actions`.
+- **No Continuous Background GPS Tracking in V1:** Location is captured strictly on-demand when the traveler activates SOS, preventing battery drain and privacy intrusion.
+
+---
+
+# 29. AUTOMATION ENGINE 16 — PROPERTY PARTNER OPERATIONS
+
+- **Trigger:** `partner.inquiry_received`, `property.stale_inventory`.
+- **Workflow:** Alerts hosts to pending booking inquiries; sends weekly occupancy summaries and seasonal pricing recommendations.
+
+---
+
+# 30. AUTOMATION ENGINE 17 — CRM & LIFECYCLE ENGAGEMENT
+
+- **Trigger:** `user.milestone_reached` (e.g. 5th Karnataka trip completed).
+- **Workflow:** Automatically awards Diamond Member loyalty points and unlocks complimentary plantation dining experiences.
+
+---
+
+# 31. AUTOMATION ENGINE 18 — PERSONAL AI AGENT ORCHESTRATION
 
 ```text
-Guest Inquiry
-      ↓
-Partner Notification
-      ↓
-AI Suggestion Optional
-      ↓
-Partner Approval
-      ↓
-Reply
+Traveler Asks Question in AI Travel Assistant (`AIPlanner.js`)
+                       │
+                       ▼
+            NESTJS AI GATEWAY MODULE
+                       │
+     • Validates User Session & Rate Quotas
+     • Delimiter Isolation (System prompt vs Untrusted user input)
+     • Pre-Retrieval Authorization & Metadata Filtering
+     • Compiles Minimum Context (Preferences + Active Trip)
+                       │
+                       ▼
+            MODEL INFERENCE ENGINE
+                       │
+          Emits Structured Function Call
+                       │
+                       ▼
+            TYPED TOOL DISPATCHER
+                       │
+   ┌───────────────────┴───────────────────┐
+   ▼                                       ▼
+Read-Only Query                         State-Changing Mutation
+(e.g. Find Cafes)                       (e.g. Book Stay / Cancel)
+   │                                       │
+   ▼                                       ▼
+Executes & Returns                      REQUIRES OUT-OF-BAND
+Data to Model                           HUMAN CONFIRMATION IN UI
+                                        (LLM cannot auto-commit)
 ```
 
-AI may draft replies.
+---
 
-The partner or controlled backend workflow remains responsible for final actions.
+# 32. AUTOMATION ENGINE 19 — SEARCH INTELLIGENCE & INTENT ROUTING
 
-# 38. STALE INVENTORY AUTOMATION
+- **Trigger:** `search.zero_results`.
+- **Workflow:** Detects unmatched luxury destination queries and notifies the content acquisition team to source properties in that region.
 
-Scheduled:
+---
+
+# 33. AUTOMATION ENGINE 20 — CONTENT MODERATION & TRUST WORKFLOWS
+
+- **Trigger:** `review.flagged`, `story.reported`.
+- **Workflow:** Automatically hides content exceeding 3 independent user reports; enqueues review task in the Trust Moderator console.
+
+---
+
+# 34. AUTOMATION ENGINE 21 — ADMIN & OPERATIONAL ALERTING
+
+- **Trigger:** `system.error_threshold_exceeded`, `payment.reconciliation_mismatch`.
+- **Workflow:** Dispatches immediate P1 alert to on-call engineering via PagerDuty / Opsgenie and engineering Slack channels.
+
+---
+
+# 35. AUTOMATION ENGINE 22 — RECOVERY & DEAD-LETTER QUEUE (DLQ)
 
 ```text
-Inventory Last Updated
-       ↓
-Threshold Exceeded?
-       ↓
-YES
-       ↓
-Partner Reminder
-       ↓
-Still Stale?
-       ↓
-Escalation
+Workflow Execution Fails
+           │
+           ▼
+Attempt Retry with Exponential Backoff (1m, 5m, 15m)
+           │
+     Failed 3 Times?
+      ┌────┴────┐
+     YES        NO
+      │          │
+      ▼          ▼
+Shunt Event to DLQ Table
+      │
+Alert Engineering Slack
+      │
+Manual Replay Supported via Admin API
 ```
 
-The R&D explicitly includes stale inventory alerts, check-in reminders and review requests as automation responsibilities for the Stay/Property domain.
+---
 
-# 39. AUTOMATION ENGINE 17 — CRM & LIFECYCLE
+# 36. RETRY POLICY & EXPONENTIAL BACKOFF
 
-The CRM engine receives meaningful events.
+| Workflow Tier | Max Retries | Backoff Strategy | Failure Action |
+| :--- | :--- | :--- | :--- |
+| **P0 — Emergency SOS** | 5 Retries | Immediate, then 10s, 30s, 60s | Escalate to secondary telephony provider + voice call |
+| **P1 — Booking Confirmation** | 3 Retries | 30s, 2m, 10m | Shunt to DLQ + alert Operations Console |
+| **P2 — User Interactions** | 3 Retries | 1m, 5m, 15m | Log warning + abort cleanly |
+| **P3 — CRM & Marketing** | 2 Retries | 15m, 60m | Discard cleanly (never retry stale marketing) |
 
+---
+
+# 37. IDEMPOTENCY & DUPLICATE SUPPRESSION
+
+1. **Transactional Deduplication:** Every workflow execution checks `idempotency_key` against Redis with a 24-hour TTL. If present, execution terminates immediately with status `ALREADY_PROCESSED`.
+2. **Notification Anti-Duplication:** Webhooks and SMS triggers enforce `dedup_key = {user_id}:{event_type}:{entity_id}` to prevent sending multiple confirmation passes for the same reservation.
+
+---
+
+# 38. WEBHOOK SECURITY & SIGNATURE VERIFICATION
+
+Every webhook emitted by the NestJS backend and received by n8n must satisfy:
+1. **Cryptographic Signature:** Validated against `X-Auric-Signature` using HMAC-SHA256 with the shared secret stored in AWS Secrets Manager.
+2. **Replay Window:** Validated against `X-Auric-Timestamp`. Payloads older than 300 seconds ($5\text{ minutes}$) or with future timestamps are discarded.
+3. **Payload Sanitization:** Validated against typed JSON schemas prior to workflow processing.
+
+---
+
+# 39. SECRETS MANAGEMENT & AWS INTEGRATION
+
+- **Zero Hardcoded Keys:** Webhook secrets, Twilio auth tokens, WhatsApp Cloud API keys, and database credentials must NEVER be stored in n8n workflow JSON or repository files.
+- **AWS Secrets Manager:** Secrets are retrieved at container startup and injected into n8n as secure environment variables.
+- **Rotation Policy:** Webhook signing secrets support dual-key rotation with a 24-hour transition overlap window.
+
+---
+
+# 40. PII MINIMIZATION IN WORKFLOWS
+
+n8n execution logs must never become a shadow database of traveler PII:
+- Payloads carry minimal identifiers (`user_id`, `booking_id`, `event_type`).
+- Full names, email addresses, phone numbers, and identity document scans are excluded from event broadcasts.
+- When an external communication requires recipient contact details, n8n makes an authenticated, signed call to the backend to fetch contact info immediately before dispatch.
+
+---
+
+# 41. WORKFLOW VERSIONING & NAMING STANDARD
+
+### Naming Standard: `DOMAIN.ACTION.VERSION`
 Examples:
+- `booking.confirmed.v1`
+- `trip.departure_reminder.v1`
+- `safety.sos_dispatch.v1`
+- `group.inactivity_check.v1`
+- `kyc.status_update.v1`
+
+---
+
+# 42. FOLDER STRUCTURE IN n8n
 
 ```text
-user.created
-search.performed
-property.saved
-booking.started
-booking.confirmed
-trip.created
-group.joined
-match.created
-```
-
-It creates a controlled lifecycle state.
-
-## Example Lifecycle
-
-```text
-NEW_USER
-   ↓
-ACTIVATED
-   ↓
-EXPLORING
-   ↓
-HIGH_INTENT
-   ↓
-CONVERTED
-   ↓
-ACTIVE_TRAVELER
-   ↓
-RETURNING_USER
-```
-
-These states should be event-derived, not manually guessed.
-
-# 40. NEXT-BEST-ACTION ENGINE
-
-The system may determine:
-
-```text
-User Context
-      ↓
-Intent Strength
-      ↓
-Eligibility
-      ↓
-Available Actions
-      ↓
-Best Relevant Action
-```
-
-Examples:
-
-```text
-Recommend Stay
-Recommend Group
-Remind Booking
-Suggest Trip Planning
-```
-
-Do not automatically send an action without suppression and relevance checks.
-
-# 41. AUTOMATION ENGINE 18 — PERSONAL AI AGENT
-
-AuricVista should expose one coherent AI assistant.
-
-Not:
-
-```text
-20 random visible AI bots
-```
-
-Instead:
-
-```text
-AURIC AI
-   │
-   ├── Travel Planning Capability
-   ├── Stay Discovery Capability
-   ├── Budget Capability
-   ├── Navigation Capability
-   ├── Group Capability
-   ├── Support Capability
-   └── Safety Assistance Capability
-```
-
-The R&D explicitly recommends one Personal AI Agent with multiple internal capabilities rather than uncontrolled agent proliferation. AuricVista_RnD finallll.pdfPDF
-
-# 42. AI AGENT REQUEST FLOW
-
-Frontend:
-
-```text
-AI Chat
-```
-
-***↓***
-
-Backend:
-
-```text
-POST /ai/chat
-```
-
-***↓***
-
-AI Gateway:
-
-```text
-Authenticate
-```
-
-***↓***
-
-```text
-Load Approved Context
-```
-
-***↓***
-
-```text
-Identify Intent
-```
-
-***↓***
-
-```text
-Select Allowed Tool
-```
-
-***↓***
-
-```text
-Call Backend Tool
-```
-
-***↓***
-
-```text
-Validate Result
-```
-
-***↓***
-
-```text
-Generate Response
-```
-
-# 43. AI CONTEXT SOURCES
-
-Allowed context may include:
-
-```text
-User Preferences
-Active Trip
-Current Destination
-Saved Places
-Approved Booking Data
-Group Context
-Wallet Summary
-```
-
-The AI should receive only context necessary for the current request.
-
-# 44. AI TOOL ORCHESTRATION
-
-Example:
-
-User:
-
-“Plan a 3-day Coorg trip under** *₹***15,000.”
-
-Flow:
-
-```text
-AI Request
-    ↓
-Intent = Trip Planning
-    ↓
-Retrieve Destination Context
-    ↓
-Weather / Places APIs
-    ↓
-Budget Constraint
-    ↓
-Generate Draft
-    ↓
-Return Proposal
-```
-
-Nothing is committed until user action.
-
-# 45. AI ACTION CONFIRMATION
-
-For consequential actions:
-
-```text
-AI Suggestion
-      ↓
-User Review
-      ↓
-Confirm
-      ↓
-Backend API
-      ↓
-State Change
-```
-
-Examples:
-
-- booking,
-- payment,
-- trip modification,
-- cancellation.
-AI should not silently execute consequential actions.
-
-# 46. AUTOMATION ENGINE 19 — SEARCH INTELLIGENCE
-
-AI can parse:
-
-```text
-"cheap stay near Cubbon Park for two people"
-```
-
-into:
-
-```text
-{
-  "location": "Cubbon Park",
-  "budget": "low",
-  "guests": 2,
-  "category": "stay"
-}
-```
-
-Then:
-
-```text
-AI Structured Output
-        ↓
-Backend Validation
-        ↓
-Search Service
-        ↓
-Results
-```
-
-The R&D defines Search Intelligence as parsing free-text into structured filters using intent understanding and external geocoding/vector capabilities. AuricVista_RnD finallll.pdfPDF
-
-# 47. AUTOMATION ENGINE 20 — RANKING & RECOMMENDATION
-
-V1 flow:
-
-```text
-Candidate Results
-       ↓
-Hard Constraints
-       ↓
-Deterministic Ranking
-       ↓
-Personalization Signals
-       ↓
-AI Explanation
-```
-
-AI should initially explain recommendations rather than become the sole authority deciding critical ranking.
-
-# 48. AUTOMATION ENGINE 21 — FRAUD & MODERATION
-
-Events:
-
-```text
-profile.created
-media.uploaded
-message.reported
-listing.submitted
-```
-
-Workflow:
-
-```text
-Content Submitted
-      ↓
-Automated Screening
-      ↓
-Risk Score
-      ↓
-Low Risk → Continue
-Medium Risk → Review Queue
-High Risk → Restrict + Human Review
-```
-
-# 49. HUMAN APPROVAL WORKFLOWS
-
-Certain decisions require humans.
-
-Examples:
-
-```text
-KYC Exception
-Fraud Case
-Safety Incident
-Commercial Promotion
-Major Property Violation
-High-Risk Account Action
-```
-
-Workflow:
-
-```text
-Automation Detects Case
-        ↓
-Create Review Request
-        ↓
-Admin Notification
-        ↓
-Human Decision
-        ↓
-Backend API
-        ↓
-State Updated
-```
-
-The R&D production controls specifically call for human approval in high-impact identity, commercial, fraud and safety decisions. AuricVista_RnD_Automation_Master_v2_4_Professional.pdfPDF
-
-# 50. AUTOMATION ENGINE 22 — ADMIN & OPERATIONS
-
-Automation should help operations teams with:
-
-- incident alerts,
-- workflow failures,
-- KYC review queues,
-- moderation queues,
-- provider failures,
-- retry scheduling.
-# 51. ERROR WORKFLOW
-
-Every production workflow requires a failure path.
-
-```text
-Workflow Failure
-      ↓
-Classify Error
-      ↓
-Retryable?
-   ┌──────┴──────┐
-  YES           NO
-   ↓             ↓
-Retry       Create Incident
-   ↓             ↓
-Success?    Admin Queue
-```
-
-Failed executions must never disappear silently.
-
-The R&D explicitly requires failed executions to become visible incidents or retry work rather than silent loss. AuricVista_RnD_Automation_Master_v2_4_Professional.pdfPDF
-
-# 52. RETRY POLICY
-
-Use:
-
-```text
-Retry 1 → Short Delay
-Retry 2 → Longer Delay
-Retry 3 → Longer Delay
-Final Failure → Incident Queue
-```
-
-Use exponential backoff.
-
-Do not retry indefinitely.
-
-# 53. IDEMPOTENCY
-
-Every side-effect workflow requires protection.
-
-Example:
-
-```text
-booking.confirmed
-```
-
-may arrive twice.
-
-Automation checks:
-
-```text
-idempotency_key
-```
-
-If already processed:
-
-```text
-STOP
-```
-
-This prevents duplicate:
-
-- notifications,
-- coupons,
-- messages,
-- incidents.
-# 54. DUPLICATE SUPPRESSION
-
-Notification workflows require a separate duplicate key.
-
-Example:
-
-```text
-user_id
-+
-notification_type
-+
-entity_id
-+
-time_window
-```
-
-Example:
-
-```text
-user_123
-booking_confirmation
-booking_999
-```
-
-must not produce multiple confirmations.
-
-# 55. WEBHOOK SECURITY
-
-Every backend** *→*** n8n or external webhook requires:
-
-```text
-Signature
-Timestamp
-Event ID
-Idempotency Key
-Correlation ID
-Payload Version
-```
-
-Validation:
-
-```text
-Webhook Received
-      ↓
-Signature Valid?
-      ↓
-Timestamp Valid?
-      ↓
-Duplicate?
-      ↓
-Schema Valid?
-      ↓
-Process
-```
-
-# 56. SECRETS MANAGEMENT
-
-Never:
-
-```text
-API_KEY = "hardcoded-key"
-```
-
-Use approved secret management.
-
-Secrets include:
-
-- KYC credentials,
-- payment credentials,
-- AI keys,
-- messaging keys,
-- database credentials.
-The R&D explicitly requires approved credential/secret management and prohibits hard-coded secrets. AuricVista_RnD_Automation_Master_v2_4_Professional.pdfPDF
-
-# 57. PII MINIMIZATION
-
-n8n should not receive the entire user profile.
-
-Only pass required information.
-
-Bad:
-
-```text
-{
-  "entire_user_record": {}
-}
-```
-
-Better:
-
-```text
-{
-  "user_id": "123",
-  "notification_preference": "push",
-  "trip_id": "456"
-}
-```
-
-Sensitive data such as KYC, location and emergency context should be minimized.
-
-# 58. WORKFLOW VERSIONING
-
-Required environments:
-
-```text
-DEVELOPMENT
-    ↓
-STAGING
-    ↓
-PRODUCTION
-```
-
-Every major workflow must have:
-
-- version,
-- change history,
-- rollback strategy.
-Never directly experiment in production.
-
-# 59. WORKFLOW NAMING STANDARD
-
-Recommended:
-
-```text
-DOMAIN.ACTION.VERSION
-```
-
-Examples:
-
-```text
-booking.confirmed.v1
-trip.departure-reminder.v1
-group.inactivity-check.v1
-kyc.exception-review.v1
-safety.missed-checkin.v1
-```
-
-# 60. FOLDER STRUCTURE
-
-```text
-AuricVista Automation
+AuricVista Production Workflows
 │
-├── 00_Core
-│   ├── Event Intake
-│   ├── Router
-│   └── Error Handler
-│
-├── 01_Identity
-├── 02_KYC_Trust
-├── 03_Stay_Property
-├── 04_Booking
-├── 05_Tourism
-├── 06_Trip
-├── 07_Matching
-├── 08_Group_Community
-├── 09_Communication
-├── 10_CRM
-├── 11_Wallet
-├── 12_Safety
-├── 13_Emergency
-├── 14_AI
-├── 15_Search
-├── 16_Moderation
-├── 17_Admin
-├── 18_Analytics
-└── 99_Error_Recovery
+├── 00_Core (Event Intake, Router, Error Recovery, DLQ)
+├── 01_Identity (Onboarding, Password Reset, Verification)
+├── 02_KYC_Trust (Verification Alerts, Review Reminders)
+├── 03_Stay_Property (Inquiries, Host Approvals, Stale Inventory)
+├── 04_Booking (Pass Generation, WhatsApp Vouchers, Invoices)
+├── 05_Tourism (Seasonal Guides, Cultural Advisories)
+├── 06_Trip (Collaborative Updates, Weather Briefings)
+├── 07_Matching (Match Alerts, Flatmate Compatibility)
+├── 08_Group_Community (Recruitment, Waitlists, Inactivity)
+├── 09_Communication (Central Channel Router, FCM, SMS, WhatsApp)
+├── 10_CRM (Milestone Loyalty, Abandoned Checkout Re-Engagement)
+├── 11_Wallet (Budget Overrun Warnings, Settlement Summaries)
+├── 12_Safety (Scheduled Check-Ins, Missing Response Escalation)
+├── 13_Emergency (Deterministic SOS Dispatch, Contact Telephony)
+├── 14_AI (Central AI Gateway Connector, Tool Mediation)
+├── 15_Search (Unmatched Query Routing, Demand Capture)
+├── 16_Moderation (Content Flags, Escalation Queues)
+├── 17_Admin (Financial Reconciliation, Operational Pagers)
+└── 99_Error_Recovery (DLQ Replay, Circuit Breaker Monitor)
 ```
 
-# 61. AUTOMATION MONITORING
+---
 
-Every workflow should expose:
+# 43. AUTOMATION MONITORING & BUSINESS METRICS
+
+Every production workflow tracks execution telemetry in Amazon CloudWatch and OpenTelemetry:
+- **Operational Metrics:** Execution count, success rate, failure rate, p95 execution latency, retry counts.
+- **Business Outcome Metrics:**
+  - Abandoned Checkout $\to$ Booking Conversion Rate ($> 8\%$ target).
+  - WhatsApp Booking Pass Open & Confirmation Rate ($> 95\%$ target).
+  - SOS Dispatch to Emergency Contact Delivery Latency ($< 3\text{ seconds}$ target).
+  - AI Suggestion Acceptance Rate ($> 65\%$ target).
+
+---
+
+# 44. PROVIDER FALLBACK MATRIX
+
+| Dependency / Service | Primary Failure Mode | Immediate Fallback Policy |
+| :--- | :--- | :--- |
+| **WhatsApp Cloud API** | Delivery timeout / rate limit | Fall back immediately to SMS via Twilio / Gupshup |
+| **Twilio SMS** | Carrier failure / route down | Fall back to Gupshup secondary SMS gateway |
+| **Firebase FCM Push** | Device token expired / APNS drop | Fall back to transactional email via Amazon SES |
+| **Google Routes API** | Quota exceeded / API error | Fall back to cached distance matrix / straight-line estimation |
+| **HyperVerge KYC API** | Vendor outage / 5xx error | Mark status `PENDING_REVIEW` and route to human moderator |
+| **Primary AI Provider** | Rate limit / inference timeout | Fall back to secondary lighter LLM provider via AI Gateway |
+
+---
+
+# 45. QUEUE PRIORITY HIERARCHY
 
 ```text
-Execution Count
-Success Rate
-Failure Rate
-Average Latency
-Retry Count
-Provider Errors
-Cost
-Business Outcome
+P0 — EMERGENCY (SOS triggers, responder dispatch, emergency contact SMS)
+P1 — TRANSACTIONAL (Booking passes, payment receipts, instant login OTPs)
+P2 — SOCIAL & REALTIME (Match alerts, group recruitment, chat push)
+P3 — PARTNER OPERATIONS (Host booking notifications, room lock alerts)
+P4 — CRM & MARKETING (Abandoned cart, travel gazette, loyalty points)
+P5 — ANALYTICS & LOGS (Telemetry aggregation, search demand indexing)
 ```
+Marketing and CRM queues must NEVER block or starve P0 emergency or P1 transactional execution workers.
 
-# 62. BUSINESS OUTCOME METRICS
+---
 
-Automation should not be evaluated only by:
+# 46. SCALING n8n ON AWS ECS FARGATE
 
-Workflow succeeded.
+- **Editor vs Worker Decoupling:** The n8n Webhook Intake runs as independent ECS Fargate tasks behind the AWS Application Load Balancer.
+- **Horizontal Auto-Scaling:** Workers scale out automatically based on Redis BullMQ queue depth ($> 100\text{ jobs}$ triggers +2 worker tasks).
+- **Graceful Shutdown:** Workers finish active workflow executions before container termination during auto-scaling events.
 
-It should measure:
+---
 
-### Booking Automation
+# 47. FULL CROSS-PRD BUTTON MAPPING MATRIX
 
-```text
-Reminder → Booking Completion Rate
-```
+Every user interaction in PRD 1 corresponds to a validated backend transaction in PRD 2 and an automated workflow in PRD 3:
 
-### Group Automation
+| Frontend Button / View (PRD 1) | Backend Endpoint (PRD 2) | Backend Domain Event | Automation Workflow (PRD 3) |
+| :--- | :--- | :--- | :--- |
+| **Sign Up / Register** | `POST /auth/register` | `user.created` | `01_Identity/user.onboarding.v1` |
+| **Verify Identity (KYC)** | `POST /kyc/submit` | `kyc.submitted` | `02_KYC_Trust/kyc.status_update.v1` |
+| **Book Stay (Step 6)** | `POST /payments/webhook` | `booking.confirmed` | `04_Booking/booking.confirmed.v1` |
+| **Abandon Checkout** | `POST /bookings/hold-expired`| `checkout.hold_expired` | `10_CRM/checkout.abandoned_cart.v1` |
+| **Create Group Trip** | `POST /trips` | `trip.created` | `06_Trip/trip.itinerary_enrich.v1` |
+| **Join Travel Group** | `POST /groups/:id/join` | `group.member_requested`| `08_Group_Community/group.recruitment.v1`|
+| **Swipe Like (Mutual Match)** | `POST /matching/swipe` | `matching.mutual_match` | `07_Matching/match.notification.v1` |
+| **Add Shared Expense** | `POST /wallet/expenses` | `wallet.split_created` | `11_Wallet/wallet.split_alert.v1` |
+| **🚨 SOS Emergency Trigger** | `POST /safety/sos` | `sos.created` (P0 Queue) | `13_Emergency/safety.sos_dispatch.v1` |
+| **Submit Verified Review** | `POST /reviews` | `review.published` | `05_Tourism/review.reflection_digest.v1`|
 
-```text
-Recruitment Reminder → Membership Conversion
-```
+---
 
-### CRM
+# 48. PRODUCTION READINESS CHECKLIST FOR AUTOMATION
 
-```text
-Re-engagement → Return Rate
-```
+- [x] **Authoritative State Isolation:** n8n has zero direct database connections and cannot modify tables without backend API validation.
+- [x] **HMAC-SHA256 Webhook Signatures:** All backend $\to$ n8n webhooks cryptographically signed with timestamp replay validation.
+- [x] **Idempotency Guarantees:** Redis-backed duplicate suppression prevents duplicate notifications and workflow executions.
+- [x] **Deterministic SOS Emergency Path:** Emergency alerts operate rule-first with P0 worker priority and zero AI dependency.
+- [x] **PII Minimization Standard:** No raw Aadhaar, PAN, or full credit card numbers ever enter n8n execution history.
+- [x] **Secrets in AWS Secrets Manager:** Zero hardcoded API keys; all provider credentials dynamically injected at runtime.
+- [x] **Multi-Channel Notification Redundancy:** Automatic SMS fallback if WhatsApp delivery fails; quiet hours enforced for marketing.
+- [x] **Dead-Letter Queue & Circuit Breakers:** Automatic circuit breaking and DLQ routing prevent cascading external provider failures.
 
-### AI
+---
 
-```text
-Recommendation → Acceptance Rate
-```
-
-### Safety
-
-```text
-Check-in → Response Rate
-False Escalation Rate
-```
-
-The R&D requires automation to expose success, failure, conversion, quality and operational impact. AuricVista_RnD finallll.pdfPDF
-
-# 63. AI OBSERVABILITY
-
-Log:
-
-```text
-AI Request ID
-Feature
-Model
-Prompt Version
-Latency
-Token Usage
-Cost
-Tool Calls
-Fallback
-User Acceptance
-User Rejection
-```
-
-This allows model evaluation without blindly assuming the AI is working.
-
-# 64. PROVIDER FALLBACK MATRIX
-
-| Provider | Primary Failure | Fallback |
-| --- | --- | --- |
-| AI | Timeout | Deterministic response / retry |
-| Weather | API failure | Cached data / no enhancement |
-| Maps | Failure | Secondary provider / basic location |
-| KYC | Provider unavailable | Retry / manual review |
-| Messaging | Delivery failure | Alternate channel |
-| Payment | Provider issue | Preserve pending state |
-| Moderation | API failure | Human review |
-
-The R&D explicitly requires provider fallback behavior for KYC, maps, weather, messaging and AI failures. AuricVista_RnD_Automation_Master_v2_4_Professional.pdfPDF
-
-# 65. AUTOMATION LATENCY REQUIREMENTS
-
-Automation should be categorized.
-
-## Real-Time Critical
-
-```text
-SOS
-Safety Alert
-Match Notification
-```
-
-Target:
-
-```text
-Immediate / Seconds
-```
-
-## Near Real-Time
-
-```text
-Booking Confirmation
-Group Update
-Chat Reminder
-```
-
-Target:
-
-```text
-Seconds
-```
-
-## Deferred
-
-```text
-CRM
-Review Requests
-Re-engagement
-Analytics
-```
-
-Target:
-
-```text
-Minutes / Scheduled
-```
-
-# 66. QUEUE PRIORITY
-
-Recommended priority:
-
-```text
-P0 — Emergency
-P1 — Transaction Communication
-P2 — User Interaction
-P3 — Partner Operations
-P4 — CRM
-P5 — Analytics
-```
-
-Marketing workflows must never delay emergency workflows.
-
-# 67. SCALING n8n
-
-As traffic grows:
-
-```text
-Load Balancer
-       ↓
-Webhook Workers
-       ↓
-n8n Workers
-       ↓
-Queue
-       ↓
-External APIs
-```
-
-Requirements:
-
-- concurrency limits,
-- queue monitoring,
-- worker scaling,
-- webhook load testing.
-The R&D explicitly requires webhook path load testing and appropriate concurrency/scaling architecture. AuricVista_RnD_Automation_Master_v2_4_Professional.pdfPDF
-
-# 68. RATE LIMIT PROTECTION
-
-External APIs have limits.
-
-Automation must implement:
-
-```text
-Rate Limit Awareness
-Queueing
-Batching
-Backoff
-Circuit Breaking
-```
-
-Example:
-
-```text
-1000 notifications
-```
-
-should not trigger:
-
-```text
-1000 simultaneous provider calls
-```
-
-without provider capacity controls.
-
-# 69. CIRCUIT BREAKERS
-
-Example:
-
-```text
-Weather API
-    ↓
-Repeated Failure
-    ↓
-Circuit Opens
-    ↓
-Stop Requests Temporarily
-    ↓
-Fallback
-    ↓
-Health Check
-    ↓
-Circuit Closes
-```
-
-# 70. AUTOMATION AUDIT TRAIL
-
-Every consequential workflow must store:
-
-```text
-Workflow ID
-Execution ID
-Trigger Event
-User / Entity
-Action
-Result
-Timestamp
-Retry Count
-Correlation ID
-```
-
-# 71. AUTOMATION → BACKEND WRITE RULE
-
-n8n may call backend APIs.
-
-It should not directly modify production tables.
-
-Correct:
-
-```text
-n8n
- ↓
-Authenticated Backend API
- ↓
-Authorization
- ↓
-Validation
- ↓
-Domain Service
- ↓
-Database
-```
-
-# 72. AUTOMATION API PERMISSIONS
-
-Each automation credential should have limited scope.
-
-Example:
-
-```text
-automation.notification.write
-automation.trip.read
-automation.crm.write
-```
-
-Do not use:
-
-```text
-SUPER_ADMIN_TOKEN
-```
-
-for all workflows.
-
-# 73. FULL CROSS-PRD BUTTON MAPPING
-
-## Authentication
-
-```text
-PRD 1
-Login Button
-      ↓
-PRD 2
-POST /auth/login
-      ↓
-PRD 3
-Onboarding / Lifecycle Automation
-```
-
-## KYC
-
-```text
-PRD 1
-Verify Identity
-      ↓
-PRD 2
-KYC Service
-      ↓
-PRD 3
-Status + Exception + Review Automation
-```
-
-## Booking
-
-```text
-PRD 1
-Book Now
-      ↓
-PRD 2
-Booking Transaction
-      ↓
-PRD 3
-Confirmation + Reminder + Review
-```
-
-## Group
-
-```text
-PRD 1
-Join Group
-      ↓
-PRD 2
-Join Request
-      ↓
-PRD 3
-Notification + Waitlist + Inactivity
-```
-
-## Matching
-
-```text
-PRD 1
-Swipe
-      ↓
-PRD 2
-Matching Engine
-      ↓
-PRD 3
-Match Notification
-```
-
-## Trip
-
-```text
-PRD 1
-Create Trip
-      ↓
-PRD 2
-Trip State
-      ↓
-PRD 3
-Weather + Reminder + Planning Automation
-```
-
-## Wallet
-
-```text
-PRD 1
-Add Expense
-      ↓
-PRD 2
-Ledger Calculation
-      ↓
-PRD 3
-Budget Alert + Settlement Reminder
-```
-
-## SOS
-
-```text
-PRD 1
-SOS Button
-      ↓
-PRD 2
-SOS Incident Created
-      ↓
-PRD 3
-Emergency Notification + Escalation
-```
-
-# 74. CORE WORKFLOW INVENTORY
-
-## Priority 1 — Must Build First
-
-- Central Event Intake
-- Event Router
-- Error Recovery Workflow
-- User Onboarding
-- KYC Status Workflow
-- Search ***→*** Intent
-- Search ***→*** Abandonment
-- Booking ***→*** Communication
-- Trip ***→*** Reminder
-- Group ***→*** Recruitment
-- Match ***→*** Notification
-- Central Communication Engine
-- Deterministic SOS Notification
-- Admin Failure Alert
-This directly aligns with the R&D's recommended first milestone: event contract, central routing, search recommendation/abandonment workflows, booking communication, property approval, deterministic SOS and production controls.
-
-# 75. PRIORITY 2
-
-- Property stale inventory
-- Partner inquiry automation
-- Group inactivity
-- Waitlist escalation
-- Budget overrun
-- Settlement reminder
-- Review request
-- CRM lifecycle
-- Safety check-ins
-- Moderation workflow
-# 76. PRIORITY 3
-
-- Advanced AI recommendations
-- Next-best-action engine
-- Advanced fraud detection
-- Predictive engagement
-- Demand prediction
-- Advanced personalization
-# 77. PRODUCTION READINESS CHECKLIST
-
-## Event Architecture
-
-- Stable event names
-- Versioned payloads
-- Correlation IDs
-- Idempotency keys
-- Event validation
-## Security
-
-- Signed webhooks
-- Scoped credentials
-- Secret management
-- PII minimization
-## Reliability
-
-- Retry policy
-- Exponential backoff
-- Circuit breakers
-- Dead-letter/error path
-## Operations
-
-- Monitoring
-- Alerting
-- Execution history
-- Failure dashboard
-## Human Control
-
-- Approval workflows
-- Admin queues
-- Escalation path
-- Rollback capability
-## AI
-
-- Tool restrictions
-- Context control
-- Cost tracking
-- Fallbacks
-- Acceptance metrics
-# 78. FINAL AUTOMATION ARCHITECTURE
-
-```text
-┌───────────────────────────────────────────────┐
-│                 PRD 1 FRONTEND                │
-│                                               │
-│ React Mobile / Desktop                        │
-│                                               │
-│ Buttons • Forms • Swipe • Chat • SOS          │
-└───────────────────────┬───────────────────────┘
-                        │
-                        ▼
-┌───────────────────────────────────────────────┐
-│                 PRD 2 BACKEND                 │
-│                                               │
-│ NestJS • PostgreSQL • Redis • WebSockets      │
-│                                               │
-│ Auth • Booking • Matching • Groups • Wallet   │
-│ KYC • Safety • Permissions • Transactions     │
-└───────────────────────┬───────────────────────┘
-                        │
-                  DOMAIN EVENTS
-                        │
-                        ▼
-┌───────────────────────────────────────────────┐
-│             EVENT / AUTOMATION LAYER          │
-│                                               │
-│ Event Intake                                  │
-│ Validation                                    │
-│ Idempotency                                   │
-│ Routing                                       │
-└───────────────────────┬───────────────────────┘
-                        │
-                        ▼
-┌───────────────────────────────────────────────┐
-│                  n8n ENGINES                  │
-│                                               │
-│ Stay • Trip • Matching • CRM • Safety         │
-│ Property • Notifications • Admin • Recovery   │
-└───────────────────────┬───────────────────────┘
-                        │
-             ┌──────────┼───────────┐
-             ▼          ▼           ▼
-┌───────────────┐ ┌──────────┐ ┌──────────────┐
-│ AI / RAG      │ │ External │ │ Human/Admin  │
-│ Intelligence  │ │ Providers│ │ Approvals    │
-└───────┬───────┘ └────┬─────┘ └──────┬───────┘
-        │              │              │
-        └──────────────┼──────────────┘
-                       │
-                       ▼
-               BACKEND CONTROLLED API
-                       │
-                       ▼
-                 AUTHORITATIVE STATE
-                       │
-                       ▼
-                 REALTIME FRONTEND
-```
-
-# 79. THE THREE PRDs — FINAL RELATIONSHIP
-
-## PRD 1 — FRONTEND
-
-Defines:
-
-What the user sees and does.
-
-Includes:
-
-- mobile-first UX,
-- onboarding,
-- KYC,
-- stays,
-- trips,
-- groups,
-- swiping,
-- matching,
-- chat,
-- wallet,
-- safety,
-- SOS.
-## PRD 2 — BACKEND
-
-Defines:
-
-How AuricVista stores, validates and controls reality.
-
-Includes:
-
-- APIs,
-- authentication,
-- authorization,
-- database,
-- transactions,
-- matching,
-- bookings,
-- KYC,
-- realtime,
-- security,
-- scalability.
-## PRD 3 — AUTOMATION
-
-Defines:
-
-What happens automatically after meaningful events.
-
-Includes:
-
-- event routing,
-- n8n,
-- AI orchestration,
-- notifications,
-- CRM,
-- reminders,
-- partner workflows,
-- safety escalation,
-- external APIs,
-- retries,
-- monitoring,
-- approvals.
-### 🔒 AURICVISTA — FINAL AUTOMATION & AI ORCHESTRATION PRINCIPLE
-
-> AuricVista will implement automation as a controlled event-driven orchestration layer rather than a collection of disconnected workflows. React frontend actions will always pass through the authoritative NestJS backend, where permissions, transactions and application state are validated before meaningful domain events are emitted. n8n will act as the primary automation orchestrator for asynchronous workflows, notifications, CRM, scheduled jobs, external integrations, partner operations, retries and controlled escalation, but will never become the source of truth for bookings, payments, inventory, permissions, financial calculations or emergency state. AI will operate through a bounded gateway with approved context and typed backend tools, providing intelligence, planning, recommendations and assistance without owning critical decisions. Every workflow must be versioned, observable, idempotent, retry-safe, permission-scoped and recoverable. High-impact identity, commercial, fraud and safety actions will support human approval, while emergency workflows remain deterministic and rule-first. The final architecture ensures that PRD 1 defines the experience, PRD 2 defines the authoritative system, and PRD 3 defines the intelligent orchestration connecting both into one scalable AuricVista platform.
+### Master Automation & AI Orchestration Specification Summary
+*This document establishes the authoritative automation architecture for AuricVista. PRD 1 defines the user experience, PRD 2 defines authoritative domain reality, and PRD 3 defines the intelligent, scalable orchestration layer that connects them.*
