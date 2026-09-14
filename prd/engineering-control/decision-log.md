@@ -309,3 +309,19 @@ Statuses:
   4. Serve defense-in-depth security headers (CSP, HSTS, X-Frame-Options: DENY) from the Nginx container.
 - **Why (Rationale):** Establishes an uncompromised security posture before connecting to live production backends.
 - **Implementation Status:** `[REQUIRES IMPLEMENTATION]` (Remediation scheduled in Phase 0).
+
+---
+
+### ADR-023: Core Application Shell, Responsive Dual-Mode Navigation & Hash-Based Deep Link Router (Phase 2)
+- **Status:** `ACCEPTED`
+- **Baseline Version:** Frontend Roadmap Phase 2, `prd/design.md` §16-17, Frontend PRD
+- **Context:** The application requires a production application shell supporting mobile-first touch ergonomics alongside desktop adaptations sharing the exact same semantic navigation model, deep-linking, focus management, overlays, and global feedback.
+- **Decision:**
+  1. Built a zero-dependency client-side URL-hash router (`js/router.js`) covering all 26+ PRD routes with parameter extraction (`:id`), keyboard shortcuts (`⌘K`, `Esc`), and overlay-aware back navigation.
+  2. Implemented responsive dual-mode navigation: canonical 5-tab mobile dock (`MobileBottomNav`) + multi-variant mobile top bar (`MobileTopBar`) on viewports $\le 768\text{px}$; compact desktop top nav (`DesktopTopNav`) with search shortcut, INR currency pill, notifications, and profile dropdown on $\ge 769\text{px}$.
+  3. Engineered reusable accessible overlay primitives: `AuricModal` (dialog with focus trap, backdrop blur, variants), `AuricBottomSheet` (touch swipe-down gesture, drag handle, scrollable slot), `MobileNavDrawer` (categorized slide-in menu with auth toggle), `GlobalSearchOverlay` (search UI shell with recent queries and category filters), and `NotificationsDrawer`.
+  4. Engineered global feedback primitives: `AuricProgressBar` (top slim gold progress bar), `AuricOfflineBanner` (real-time connectivity detector), `AuricToast` (multi-variant feedback queue), and `AuricErrorBoundary` (resilient error recovery).
+  5. Implemented standardized quiet-luxury route placeholders for future roadmap phases (Phases 3–10) with explicit security boundary labels.
+- **Why (Rationale):** Establishes the real architectural framework every future product module will plug into without faking backend transactions or business rules.
+- **Implementation Status:** `[IMPLEMENTED & VERIFIED]` (22/22 unit tests pass; 7/7 responsive viewports pass).
+

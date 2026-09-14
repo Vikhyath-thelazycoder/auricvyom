@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AURICVISTA Phase 2 Automated Verification Suite</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #080B10;
+      color: #E2E8F0;
+      margin: 0;
+      padding: 24px;
+    }
+    h1 {
+      font-family: serif;
+      color: #E5A93C;
+      margin-bottom: 8px;
+    }
+    .test-summary-bar {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 24px;
+      padding: 16px;
+      background: #0E141E;
+      border: 1px solid rgba(229, 169, 60, 0.2);
+      border-radius: 12px;
+    }
+    .metric {
+      display: flex;
+      flex-direction: column;
+    }
+    .metric-val {
+      font-size: 1.8rem;
+      font-weight: 800;
+    }
+    .metric-val.pass { color: #22C55E; }
+    .metric-val.fail { color: #EF4444; }
+    .metric-label {
+      font-size: 0.75rem;
+      color: #7E8B9F;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .test-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+    .test-card {
+      background: #0E141E;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      padding: 14px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .test-card.passed {
+      border-left: 4px solid #22C55E;
+    }
+    .test-card.failed {
+      border-left: 4px solid #EF4444;
+      background: rgba(239, 68, 68, 0.08);
+    }
+    .test-name {
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+    .test-desc {
+      font-size: 0.8rem;
+      color: #7E8B9F;
+      margin-top: 2px;
+    }
+    .test-badge {
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 9999px;
+    }
+    .test-badge.pass {
+      background: rgba(34, 197, 94, 0.15);
+      color: #22C55E;
+      border: 1px solid rgba(34, 197, 94, 0.3);
+    }
+    .test-badge.fail {
+      background: rgba(239, 68, 68, 0.15);
+      color: #EF4444;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+    iframe {
+      width: 100%;
+      height: 480px;
+      border: 1px solid rgba(229, 169, 60, 0.25);
+      border-radius: 12px;
+      margin-top: 24px;
+      background: #080B10;
+    }
+  </style>
+</head>
+<body>
+  <h1>AURICVISTA Phase 2 Verification Suite</h1>
+  <p style="color: #7E8B9F; margin-top: 0;">Automated Architectural & Integration Verification</p>
+
+  <div class="test-summary-bar">
+    <div class="metric">
+      <span class="metric-val" id="total-tests">0</span>
+      <span class="metric-label">Total Tests</span>
+    </div>
+    <div class="metric">
+      <span class="metric-val pass" id="passed-tests">0</span>
+      <span class="metric-label">Passed</span>
+    </div>
+    <div class="metric">
+      <span class="metric-val fail" id="failed-tests">0</span>
+      <span class="metric-label">Failed</span>
+    </div>
+  </div>
+
+  <div class="test-grid" id="test-results-list"></div>
+
+  <h2 style="font-family: serif; color: #E5A93C; margin-top: 32px; font-size: 1.2rem;">Live Shell Preview Sandbox</h2>
+  <iframe id="app-iframe" src="./index.html"></iframe>
+
+  <script type="module">
+    import { appState, ROUTES, SCREEN_IDS } from "./js/state.js";
+    import { router } from "./js/router.js";
+
+    const results = [];
+
+    function assert(name, description, condition, errorMsg = "") {
+      results.push({
+        name,
+        description,
+        passed: Boolean(condition),
+        error: condition ? "" : (errorMsg || "Assertion failed")
+      });
+    }
+
+    async function runAllTests() {
+      // 1. ROUTE COVERAGE TESTS (All 26+ Canonical PRD Routes)
+      const allRoutes = Object.values(ROUTES);
+      assert(
+        "PRD Routes Registry Completeness",
+        "Validates all 26+ canonical PRD routes are registered",
+        allRoutes.length >= 26,
+        `Expected >= 26 routes, found ${allRoutes.length}`
+      );
+
+      // Verify route pattern extraction
+      const testMatch = router._matchRoute("/stays/stay-hosteller-coorg");
+      assert(
+        "Dynamic Route Parameter Extraction",
+        "Extracts parameter :id from /stays/:id",
+        testMatch && testMatch.params.id === "stay-hosteller-coorg",
+        `Expected id='stay-hosteller-coorg', got ${JSON.stringify(testMatch?.params)}`
+      );
+
+      const groupMatch = router._matchRoute("/groups/grp-trekking-squad");
+      assert(
+        "Group Route Parameter Extraction",
+        "Extracts parameter :id from /groups/:id",
+        groupMatch && groupMatch.params.id === "grp-trekking-squad",
+        `Expected id='grp-trekking-squad', got ${JSON.stringify(groupMatch?.params)}`
+      );
+
+      // 2. STATE MANAGEMENT & AUTH TESTS
+      const initialAuth = appState.getState().authStatus;
+      assert(
+        "Default Auth Baseline",
+        "Validates default authenticated member profile",
+        initialAuth === "authenticated" && appState.getState().currentUser !== null
+      );
+
+      appState.toggleAuth();
+      const guestAuth = appState.getState().authStatus;
+      assert(
+        "Auth Toggle: Switch to Guest",
+        "Toggles state to Guest Explorer mode",
+        guestAuth === "guest" && appState.getState().currentUser === null
+      );
+
+      appState.toggleAuth();
+      const restoredAuth = appState.getState().authStatus;
+      assert(
+        "Auth Toggle: Restore Member Session",
+        "Restores verified member session state",
+        restoredAuth === "authenticated" && appState.getState().currentUser.id === "usr-ketan-sharma"
+      );
+
+      // 3. OVERLAY STACK TESTS
+      assert(
+        "Initial Overlay Clean State",
+        "Ensures no modals, sheets, or drawers are open initially",
+        !appState.hasActiveOverlay()
+      );
+
+      appState.openDrawer("mainNav");
+      assert(
+        "Open Navigation Drawer",
+        "Opens main navigation drawer and marks active overlay",
+        appState.getState().activeDrawer === "mainNav" && appState.hasActiveOverlay()
+      );
+
+      appState.closeDrawer();
+      assert(
+        "Close Navigation Drawer",
+        "Closes navigation drawer and clears active overlay",
+        appState.getState().activeDrawer === null && !appState.hasActiveOverlay()
+      );
+
+      appState.openBottomSheet({
+        id: "test-sheet",
+        title: "Filter Stays",
+        subtitle: "Coffee Estates in Coorg"
+      });
+      assert(
+        "Open Reusable Bottom Sheet Primitive",
+        "Opens bottom sheet with title and subtitle metadata",
+        appState.getState().activeSheet?.id === "test-sheet" && appState.hasActiveOverlay()
+      );
+
+      appState.closeBottomSheet();
+      assert(
+        "Close Reusable Bottom Sheet Primitive",
+        "Closes bottom sheet and clears active overlay",
+        appState.getState().activeSheet === null && !appState.hasActiveOverlay()
+      );
+
+      appState.openModal({
+        id: "test-confirm-dialog",
+        title: "Confirm Booking Cancellation",
+        variant: "destructive",
+        message: "Are you sure you want to cancel your Kabini safari hold?"
+      });
+      assert(
+        "Open Reusable Modal Primitive",
+        "Opens accessible modal dialog with destructive variant",
+        appState.getState().activeModal?.id === "test-confirm-dialog" && appState.hasActiveOverlay()
+      );
+
+      appState.closeModal();
+      assert(
+        "Close Reusable Modal Primitive",
+        "Closes accessible modal dialog",
+        appState.getState().activeModal === null && !appState.hasActiveOverlay()
+      );
+
+      // 4. TOAST FEEDBACK QUEUE TESTS
+      appState.showToast({
+        type: "success",
+        message: "Automated test toast notification"
+      });
+      const queue = appState.getState().toastQueue;
+      assert(
+        "Toast Queue Management",
+        "Adds structured toast message to the feedback stack",
+        queue.length > 0 && queue[queue.length - 1].message === "Automated test toast notification"
+      );
+
+      // 5. SEARCH OVERLAY FOUNDATION TESTS
+      appState.openSearchOverlay();
+      assert(
+        "Open Global Search Overlay",
+        "Opens search foundation shell",
+        appState.getState().searchOverlayOpen === true && appState.hasActiveOverlay()
+      );
+
+      appState.addRecentSearch("Kabini wilderness safari");
+      assert(
+        "Recent Search Persistence",
+        "Adds query to recent search list",
+        appState.getState().recentSearches.includes("Kabini wilderness safari")
+      );
+
+      appState.closeSearchOverlay();
+      assert(
+        "Close Global Search Overlay",
+        "Closes search foundation shell",
+        appState.getState().searchOverlayOpen === false && !appState.hasActiveOverlay()
+      );
+
+      // 6. NOTIFICATIONS CENTER TESTS
+      const initialUnread = appState.getState().unreadNotifications;
+      assert(
+        "Notification Counter Baseline",
+        "Validates unread notification count exists",
+        typeof initialUnread === "number" && initialUnread >= 0
+      );
+
+      appState.markAllNotificationsRead();
+      assert(
+        "Mark All Notifications Read",
+        "Clears unread counter and marks items as read",
+        appState.getState().unreadNotifications === 0 &&
+        appState.getState().notifications.every(n => n.read === true)
+      );
+
+      // 7. OFFLINE & DEGRADED STATE TESTS
+      appState.setState({ isOnline: false });
+      assert(
+        "Offline State Detection",
+        "Validates system detects disconnected status",
+        appState.getState().isOnline === false
+      );
+
+      appState.setState({ isOnline: true });
+      assert(
+        "Online State Restoration",
+        "Restores online network status",
+        appState.getState().isOnline === true
+      );
+
+      // 8. ESCAPE KEY & OVERLAY-AWARE BACK NAVIGATION TESTS
+      appState.openDrawer("mainNav");
+      const closedOverlay = appState.closeAllOverlays();
+      assert(
+        "Overlay-Aware Escape/Back Dismissal",
+        "Dismisses topmost active overlay when back action is triggered",
+        closedOverlay === true && !appState.hasActiveOverlay()
+      );
+
+      // Render Results
+      renderResults();
+    }
+
+    function renderResults() {
+      const totalEl = document.getElementById("total-tests");
+      const passedEl = document.getElementById("passed-tests");
+      const failedEl = document.getElementById("failed-tests");
+      const listEl = document.getElementById("test-results-list");
+
+      const passedCount = results.filter(r => r.passed).length;
+      const failedCount = results.length - passedCount;
+
+      totalEl.textContent = results.length;
+      passedEl.textContent = passedCount;
+      failedEl.textContent = failedCount;
+
+      listEl.innerHTML = results.map(r => `
+        <div class="test-card ${r.passed ? "passed" : "failed"}">
+          <div>
+            <div class="test-name">${r.name}</div>
+            <div class="test-desc">${r.description} ${r.error ? ` — <span style="color:#EF4444">${r.error}</span>` : ""}</div>
+          </div>
+          <span class="test-badge ${r.passed ? "pass" : "fail"}">
+            ${r.passed ? "PASS" : "FAIL"}
+          </span>
+        </div>
+      `).join("");
+    }
+
+    runAllTests();
+  </script>
+</body>
+</html>

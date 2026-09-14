@@ -61,6 +61,29 @@
 
 ---
 
+# 2.1 FRONTEND DEVELOPMENT ROADMAP (10-PHASE SYSTEM)
+
+```text
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│                      AURICVISTA 10-PHASE FRONTEND ROADMAP STATUS                       │
+├────┬──────────────────────────────────────────┬───────────┬────────────────────────────┤
+│ PH │ PHASE NAME                               │ STATUS    │ VERIFICATION / ARTIFACTS   │
+├────┼──────────────────────────────────────────┼───────────┼────────────────────────────┤
+│ 01 │ Frontend Foundation & Design System      │ COMPLETED │ tokens.css, primitives, QA │
+│ 02 │ Mobile Navigation & Core App Shell       │ COMPLETED │ router.js, overlays, tests │
+│ 03 │ Explore / Home / Search                  │ SCHEDULED │ Next immediate phase       │
+│ 04 │ Stays & Booking Engine                   │ SCHEDULED │ 15-min hold, checkout      │
+│ 05 │ Trips & Itinerary Planner                │ SCHEDULED │ Multi-day drag & drop      │
+│ 06 │ Connect & Social Matching                │ SCHEDULED │ Buddy/dating/flatmates     │
+│ 07 │ Chat, Inbox & Community                  │ SCHEDULED │ 1-on-1 & squad messaging   │
+│ 08 │ AI, Wallet & Safety                      │ SCHEDULED │ Concierge, splits, SOS     │
+│ 09 │ Profile, KYC, Settings & Operations      │ SCHEDULED │ DigiLocker, settings       │
+│ 10 │ Cross-Platform Polish & Production QA    │ SCHEDULED │ Production readiness       │
+└────┴──────────────────────────────────────────┴───────────┴────────────────────────────┘
+```
+
+---
+
 # 3. PHASE-BY-PHASE ENGINEERING ROADMAP
 
 ---

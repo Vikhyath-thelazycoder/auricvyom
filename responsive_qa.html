@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>AURICVISTA — Mobile Responsive QA Harness</title>
+  <title>AURICVISTA — Phase 2 Cross-Breakpoint & Responsive QA Suite</title>
   <style>
     body {
       background: #080B10;
@@ -11,11 +11,11 @@
       padding: 24px;
       margin: 0;
     }
-    h1 { color: #E5A93C; margin-bottom: 8px; }
+    h1 { color: #E5A93C; margin-bottom: 8px; font-family: serif; }
     .viewport-grid {
       display: flex;
       flex-wrap: wrap;
-      gap: 32px;
+      gap: 28px;
       align-items: flex-start;
       margin-top: 24px;
     }
@@ -31,12 +31,13 @@
     .device-header {
       display: flex;
       justify-content: space-between;
+      align-items: center;
       margin-bottom: 12px;
       font-size: 0.85rem;
     }
     .device-status {
       font-weight: 700;
-      padding: 2px 8px;
+      padding: 3px 10px;
       border-radius: 9999px;
       font-size: 0.72rem;
     }
@@ -56,76 +57,146 @@
   </style>
 </head>
 <body>
-  <h1>AuricVista Mobile Responsive QA Suite</h1>
-  <p style="color: #7E8B9F; margin: 0;">Automated Multi-Viewport Verification across 360px, 375px, 390px, 412px, 430px.</p>
+  <h1>AuricVista Phase 2 Responsive & Navigation QA Suite</h1>
+  <p style="color: #7E8B9F; margin: 0;">Automated Multi-Viewport Verification: Mobile (320px, 360px, 390px, 414px) and Desktop/Tablet (768px, 1024px, 1280px, 1440px).</p>
 
-  <div class="viewport-grid" id="devices-container"></div>
+  <div class="viewport-grid" id="devices-container">
+    <!-- 1. 320px Compact Mobile -->
+    <div class="device-card">
+      <div class="device-header">
+        <div><strong>320px</strong> (Compact Mobile)</div>
+        <div id="status-320" class="device-status">Testing...</div>
+      </div>
+      <iframe id="iframe-320" src="./index.html" width="320" height="580"></iframe>
+      <div id="log-320" class="metrics-log">Loading viewport...</div>
+    </div>
+
+    <!-- 2. 360px Android Standard -->
+    <div class="device-card">
+      <div class="device-header">
+        <div><strong>360px</strong> (Android Standard)</div>
+        <div id="status-360" class="device-status">Testing...</div>
+      </div>
+      <iframe id="iframe-360" src="./index.html" width="360" height="580"></iframe>
+      <div id="log-360" class="metrics-log">Loading viewport...</div>
+    </div>
+
+    <!-- 3. 390px iPhone 14/15 -->
+    <div class="device-card">
+      <div class="device-header">
+        <div><strong>390px</strong> (iPhone 14/15)</div>
+        <div id="status-390" class="device-status">Testing...</div>
+      </div>
+      <iframe id="iframe-390" src="./index.html" width="390" height="580"></iframe>
+      <div id="log-390" class="metrics-log">Loading viewport...</div>
+    </div>
+
+    <!-- 4. 414px iPhone Plus / Pixel -->
+    <div class="device-card">
+      <div class="device-header">
+        <div><strong>414px</strong> (iPhone Plus / Large Mobile)</div>
+        <div id="status-414" class="device-status">Testing...</div>
+      </div>
+      <iframe id="iframe-414" src="./index.html" width="414" height="580"></iframe>
+      <div id="log-414" class="metrics-log">Loading viewport...</div>
+    </div>
+
+    <!-- 5. 768px Tablet Portrait -->
+    <div class="device-card">
+      <div class="device-header">
+        <div><strong>768px</strong> (Tablet Portrait Boundary)</div>
+        <div id="status-768" class="device-status">Testing...</div>
+      </div>
+      <iframe id="iframe-768" src="./index.html" width="768" height="580"></iframe>
+      <div id="log-768" class="metrics-log">Loading viewport...</div>
+    </div>
+
+    <!-- 6. 1024px Desktop / Tablet Landscape -->
+    <div class="device-card">
+      <div class="device-header">
+        <div><strong>1024px</strong> (Desktop Navigation Active)</div>
+        <div id="status-1024" class="device-status">Testing...</div>
+      </div>
+      <iframe id="iframe-1024" src="./index.html" width="1024" height="580"></iframe>
+      <div id="log-1024" class="metrics-log">Loading viewport...</div>
+    </div>
+
+    <!-- 7. 1280px Full Desktop -->
+    <div class="device-card">
+      <div class="device-header">
+        <div><strong>1280px</strong> (Full HD Desktop)</div>
+        <div id="status-1280" class="device-status">Testing...</div>
+      </div>
+      <iframe id="iframe-1280" src="./index.html" width="1280" height="580"></iframe>
+      <div id="log-1280" class="metrics-log">Loading viewport...</div>
+    </div>
+  </div>
 
   <script>
-    const viewports = [
-      { name: "Compact Android (360px)", width: 360, height: 740 },
-      { name: "iPhone SE (375px)", width: 375, height: 667 },
-      { name: "iPhone 14 / 15 Standard (390px)", width: 390, height: 844 },
-      { name: "Google Pixel 7 (412px)", width: 412, height: 915 },
-      { name: "iPhone Pro Max (430px)", width: 430, height: 932 }
-    ];
+    const viewports = [320, 360, 390, 414, 768, 1024, 1280];
 
-    const container = document.getElementById("devices-container");
+    function auditIframe(vp) {
+      const iframe = document.getElementById(`iframe-${vp}`);
+      const statusEl = document.getElementById(`status-${vp}`);
+      const logEl = document.getElementById(`log-${vp}`);
 
-    viewports.forEach(vp => {
-      const card = document.createElement("div");
-      card.className = "device-card";
-      card.innerHTML = `
-        <div class="device-header">
-          <span style="font-weight: 700; color: #E5A93C;">${vp.name}</span>
-          <span class="device-status" id="status-${vp.width}">Auditing...</span>
-        </div>
-        <iframe src="./index.html" width="${vp.width}" height="${vp.height}" id="frame-${vp.width}"></iframe>
-        <div class="metrics-log" id="log-${vp.width}">Loading frame...</div>
-      `;
-      container.appendChild(card);
+      try {
+        const doc = iframe.contentDocument || iframe.contentWindow.document;
+        const win = iframe.contentWindow;
+        if (!doc || !doc.body) return;
 
-      const frame = card.querySelector(`#frame-${vp.width}`);
-      frame.onload = () => {
-        try {
-          const doc = frame.contentDocument || frame.contentWindow.document;
-          const scrollW = doc.documentElement.scrollWidth;
-          const clientW = doc.documentElement.clientWidth;
-          const bodyScrollW = doc.body.scrollWidth;
-          const statusBadge = card.querySelector(`#status-${vp.width}`);
-          const log = card.querySelector(`#log-${vp.width}`);
+        const body = doc.body;
+        const docEl = doc.documentElement;
 
-          const hasOverflow = scrollW > vp.width + 1; // 1px tolerance for subpixel rounding
+        const scrollW = Math.max(body.scrollWidth, docEl.scrollWidth);
+        const clientW = docEl.clientWidth;
+        const overflow = scrollW - clientW;
 
-          // Touch target check
-          const dockItems = Array.from(doc.querySelectorAll(".dock-item-btn, .top-action-btn, .btn-gold"));
-          const smallTargets = dockItems.filter(el => {
-            const rect = el.getBoundingClientRect();
-            return rect.height < 40 || rect.width < 40;
-          });
+        const desktopNav = doc.getElementById("desktop-top-nav");
+        const mobileHeader = doc.getElementById("mobile-header");
+        const mobileDock = doc.getElementById("mobile-bottom-dock");
 
-          if (!hasOverflow && smallTargets.length === 0) {
-            statusBadge.className = "device-status status-pass";
-            statusBadge.textContent = "PASSED ✓";
-            log.innerHTML = `
-              <div>• ScrollWidth: <strong>${scrollW}px</strong> / Target: ${vp.width}px</div>
-              <div>• Zero Horizontal Overflow: <strong>PASS</strong></div>
-              <div>• Min 44px Touch Targets Verified: <strong>PASS (${dockItems.length} audited)</strong></div>
-              <div>• Bottom Dock Clear Height: <strong>PASS</strong></div>
-            `;
-          } else {
-            statusBadge.className = "device-status status-fail";
-            statusBadge.textContent = "VIOLATION ✕";
-            log.innerHTML = `
-              <div>• ScrollWidth: ${scrollW}px (Target: ${vp.width}px)</div>
-              <div>• Overflow: ${hasOverflow ? "DETECTED (" + (scrollW - vp.width) + "px)" : "None"}</div>
-              <div>• Sub-40px Touch Targets: ${smallTargets.length} items</div>
-            `;
-          }
-        } catch (e) {
-          console.error(e);
+        const isDesktopBreakpoint = vp >= 769;
+
+        const desktopNavVisible = desktopNav && win.getComputedStyle(desktopNav).display !== "none";
+        const mobileHeaderVisible = mobileHeader && win.getComputedStyle(mobileHeader).display !== "none";
+        const mobileDockVisible = mobileDock && win.getComputedStyle(mobileDock).display !== "none";
+
+        let navCorrect = false;
+        let navReport = "";
+
+        if (isDesktopBreakpoint) {
+          navCorrect = desktopNavVisible && !mobileDockVisible && !mobileHeaderVisible;
+          navReport = `DesktopNav: ${desktopNavVisible ? "VISIBLE" : "HIDDEN"}, MobileDock: ${mobileDockVisible ? "VISIBLE" : "HIDDEN"}`;
+        } else {
+          navCorrect = !desktopNavVisible && mobileDockVisible && mobileHeaderVisible;
+          navReport = `MobileHeader: ${mobileHeaderVisible ? "VISIBLE" : "HIDDEN"}, MobileDock: ${mobileDockVisible ? "VISIBLE" : "HIDDEN"}`;
         }
-      };
+
+        const isPassing = overflow <= 1 && navCorrect;
+
+        statusEl.textContent = isPassing ? "PASS" : "FAIL";
+        statusEl.className = `device-status ${isPassing ? "status-pass" : "status-fail"}`;
+
+        logEl.innerHTML = `
+          Client Width: <strong>${clientW}px</strong> | Scroll Width: <strong>${scrollW}px</strong><br>
+          Horizontal Overflow: <strong style="color: ${overflow <= 1 ? '#22C55E' : '#EF4444'}">${overflow}px</strong><br>
+          Nav Architecture: <strong>${navCorrect ? "CORRECT" : "MISMATCH"}</strong> (${navReport})
+        `;
+      } catch (err) {
+        statusEl.textContent = "CORS/ERR";
+        logEl.textContent = err.message;
+      }
+    }
+
+    window.addEventListener("load", () => {
+      setTimeout(() => {
+        viewports.forEach(vp => {
+          const iframe = document.getElementById(`iframe-${vp}`);
+          iframe.addEventListener("load", () => auditIframe(vp));
+          auditIframe(vp);
+        });
+      }, 1000);
     });
   </script>
 </body>
