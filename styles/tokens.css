@@ -1,0 +1,122 @@
+/* ==========================================================================
+   AURICVISTA — PRODUCTION MASTER DESIGN TOKENS
+   According to prd/design.md & Authority Hierarchy
+   Visual Direction: Quiet Luxury + Cinematic Travel + Modern Social Discovery
+   ========================================================================== */
+
+:root {
+  /* Surface Layers (Deep Obsidian & Charcoal Palette) */
+  --bg-primary: #080B10;
+  --bg-surface: #0E141E;
+  --bg-surface-elevated: #151D2C;
+  --bg-surface-hover: #1D273B;
+  --bg-surface-float: rgba(14, 20, 30, 0.88);
+  --bg-card: rgba(14, 20, 30, 0.78);
+  --bg-card-hover: rgba(21, 29, 44, 0.92);
+  --bg-scrim: rgba(8, 11, 16, 0.85);
+
+  /* Auric Gold Brand Signature System */
+  --gold-primary: #E5A93C;
+  --gold-light: #F5D061;
+  --gold-glow: #F3C766;
+  --gold-dark: #B88220;
+  --gold-deep: #8F6212;
+  --gold-subtle: rgba(229, 169, 60, 0.12);
+  --gold-highlight: rgba(245, 208, 97, 0.18);
+  --gold-gradient: linear-gradient(135deg, #F5D061 0%, #E5A93C 50%, #B88220 100%);
+  --gold-gradient-soft: linear-gradient(135deg, rgba(245, 208, 97, 0.15) 0%, rgba(229, 169, 60, 0.08) 100%);
+
+  /* Social Accent (Controlled for Dating & Matching) */
+  --social-pink: #EC4899;
+  --social-pink-light: #F472B6;
+  --social-pink-dark: #DB2777;
+  --social-pink-subtle: rgba(236, 72, 153, 0.12);
+  --social-pink-gradient: linear-gradient(135deg, #F472B6 0%, #EC4899 100%);
+
+  /* Functional Status Colors */
+  --success: #22C55E;
+  --success-subtle: rgba(34, 197, 94, 0.14);
+  --warning: #F59E0B;
+  --warning-subtle: rgba(245, 158, 11, 0.14);
+  --danger: #EF4444;
+  --danger-subtle: rgba(239, 68, 68, 0.14);
+  --danger-glow: rgba(239, 68, 68, 0.35);
+
+  /* Typography Colors */
+  --text-primary: #FFFFFF;
+  --text-secondary: #C4CBD6;
+  --text-muted: #7E8B9F;
+  --text-faint: #4B5565;
+  --text-inverse: #080B10;
+  --text-gold: #E5A93C;
+
+  /* Borders & Specular Outlines */
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-card: rgba(255, 255, 255, 0.12);
+  --border-elevated: rgba(255, 255, 255, 0.16);
+  --border-gold: rgba(229, 169, 60, 0.25);
+  --border-gold-focus: rgba(229, 169, 60, 0.65);
+  --border-gold-strong: #E5A93C;
+  --border-pink: rgba(236, 72, 153, 0.35);
+
+  /* Glassmorphism & Blur Tokens */
+  --glass-bg: rgba(14, 20, 30, 0.82);
+  --glass-dock: rgba(10, 14, 22, 0.92);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-blur-sm: blur(10px);
+  --glass-blur-md: blur(18px);
+  --glass-blur-lg: blur(28px);
+
+  /* Typography Font Families */
+  --font-display: 'Cinzel', serif;
+  --font-serif: 'Playfair Display', Georgia, serif;
+  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-accent: 'Outfit', sans-serif;
+
+  /* 8px Base Spacing Scale */
+  --space-0-5: 2px;
+  --space-1: 4px;
+  --space-1-5: 6px;
+  --space-2: 8px;
+  --space-2-5: 10px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
+
+  /* Border Radii */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+  --radius-full: 9999px;
+
+  /* Elevation Shadows */
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.55);
+  --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.75);
+  --shadow-xl: 0 24px 64px rgba(0, 0, 0, 0.88);
+  --shadow-gold: 0 4px 22px rgba(229, 169, 60, 0.24);
+  --shadow-gold-hover: 0 8px 32px rgba(229, 169, 60, 0.38);
+
+  /* Motion & Transitions */
+  --transition-fast: 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-smooth: 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-slow: 0.52s cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-spring: 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* Device Safe Areas & Standard Dimensions */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --mobile-header-height: 58px;
+  --mobile-nav-height: 66px;
+  --touch-target-min: 44px;
+}
